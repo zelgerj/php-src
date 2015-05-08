@@ -12,7 +12,7 @@
   | obtain it through the world-wide-web, please send a note to          |
   | license@php.net so we can mail you a copy immediately.               |
   +----------------------------------------------------------------------+
-  | Author:                                                              |
+  | Author: Johann Zelger <jz@appserver.io>                              |
   +----------------------------------------------------------------------+
 */
 
@@ -33,6 +33,30 @@ extern zend_module_entry fhreads_module_entry;
 #else
 #	define PHP_FHREADS_API
 #endif
+
+#include <stdio.h>
+#ifndef _WIN32
+#include <pthread.h>
+#include <sys/time.h>
+#include <signal.h>
+#else
+#include <pthread.h>
+#include <signal.h>
+#endif
+
+#include <Zend/zend.h>
+#include <Zend/zend_closures.h>
+#include <Zend/zend_compile.h>
+#include <Zend/zend_exceptions.h>
+#include <Zend/zend_extensions.h>
+#include <Zend/zend_globals.h>
+#include <Zend/zend_hash.h>
+#include <Zend/zend_ts_hash.h>
+#include <Zend/zend_interfaces.h>
+#include <Zend/zend_list.h>
+#include <Zend/zend_object_handlers.h>
+#include <Zend/zend_variables.h>
+#include <Zend/zend_vm.h>
 
 #ifdef ZTS
 #include "TSRM.h"
@@ -58,11 +82,32 @@ ZEND_END_MODULE_GLOBALS(fhreads)
    examples in any other php module directory.
 */
 
+/* {{{ TSRM manipulation */
+#define FHREADS_FETCH_ALL(ls, id, type) ((type) (*((void ***) ls))[TSRM_UNSHUFFLE_RSRC_ID(id)])
+#define FHREADS_FETCH_CTX(ls, id, type, element) (((type) (*((void ***) ls))[TSRM_UNSHUFFLE_RSRC_ID(id)])->element)
+#define FHREADS_CG(ls, v) FHREADS_FETCH_CTX(ls, compiler_globals_id, zend_compiler_globals*, v)
+#define FHREADS_CG_ALL(ls) FHREADS_FETCH_ALL(ls, compiler_globals_id, zend_compiler_globals*)
+#define FHREADS_EG(ls, v) FHREADS_FETCH_CTX(ls, executor_globals_id, zend_executor_globals*, v)
+#define FHREADS_SG(ls, v) FHREADS_FETCH_CTX(ls, sapi_globals_id, sapi_globals_struct*, v)
+#define FHREADS_EG_ALL(ls) FHREADS_FETCH_ALL(ls, executor_globals_id, zend_executor_globals*)
+/* }}} */
+
 #ifdef ZTS
 #define FHREADS_G(v) TSRMG(fhreads_globals_id, zend_fhreads_globals *, v)
 #else
 #define FHREADS_G(v) (fhreads_globals.v)
 #endif
+
+/* {{{ pthread_self wrapper */
+static inline ulong fthread_self() {
+#ifdef _WIN32
+	return (ulong) GetCurrentThreadId();
+#else
+	return (ulong) pthread_self();
+#endif
+} /* }}} */
+
+
 
 #endif	/* PHP_FHREADS_H */
 

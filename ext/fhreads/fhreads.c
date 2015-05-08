@@ -12,14 +12,14 @@
   | obtain it through the world-wide-web, please send a note to          |
   | license@php.net so we can mail you a copy immediately.               |
   +----------------------------------------------------------------------+
-  | Author:                                                              |
+  | Author: Johann Zelger <jz@appserver.io>                              |
   +----------------------------------------------------------------------+
 */
 
 /* $Id$ */
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+# include "config.h"
 #endif
 
 #include "php.h"
@@ -44,33 +44,94 @@ PHP_INI_END()
 */
 /* }}} */
 
-/* Remove the following function when you have successfully modified config.m4
-   so that your module can be compiled into PHP, it exists only for testing
-   purposes. */
-
-/* Every user-visible function in PHP should document itself in the source */
-/* {{{ proto string confirm_fhreads_compiled(string arg)
-   Return a string to confirm that the module is compiled in */
-PHP_FUNCTION(confirm_fhreads_compiled)
+void *fhread_routine (void *arg)
 {
-	char *arg = NULL;
-	int arg_len, len;
-	char *strg;
+	/* $this original pointer */
+	zval *this_ptr = NULL,
+	*this = NULL;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &arg, &arg_len) == FAILURE) {
-		return;
+	/* init threadsafe manager local storage */
+	void ***tsrm_ls = NULL;
+
+	/* executor globals */
+	zend_executor_globals *ZEG = NULL;
+
+	/* create new context */
+	tsrm_ls = tsrm_new_interpreter_context();
+
+	/* set interpreter context */
+	tsrm_set_interpreter_context(tsrm_ls);
+
+	/* request startup */
+	php_request_startup(TSRMLS_C);
+
+	ZEG = FHREADS_EG_ALL(TSRMLS_C);
+
+	/*
+	* Allocate $this
+	*/
+	ALLOC_INIT_ZVAL(this);
+
+	/*
+	* Assign $this
+	*/
+	this_ptr = this;
+
+	/**
+	* Thread Block Begin
+	**/
+	zend_first_try {
+
+
+	} zend_end_try();
+
+	/* shutdown request */
+	php_request_shutdown(TSRMLS_C);
+
+	/* free interpreter */
+	tsrm_free_interpreter_context(tsrm_ls);
+
+	pthread_exit(NULL);
+
+#ifdef _WIN32
+	return NULL; /* silence MSVC compiler */
+#endif
+}
+
+/* {{{ proto fhreads_self()
+	Will return current thread id */
+PHP_FUNCTION(fhreads_self)
+{
+	ZVAL_LONG(return_value, fthread_self());
+}
+
+/* {{{ proto fhreads_create()
+	Will return start a new thread an returns the corresponding thread id */
+PHP_FUNCTION(fhreads_create)
+{
+	pthread_t thread_id;
+	void *thread_result;
+	int status;
+
+	status = pthread_create(&thread_id, NULL, fhread_routine, NULL);
+
+	RETURN_LONG((long)thread_id);
+}
+
+/* {{{ proto fhreads_join()
+   Make calling thread wait for termination of the given thread id.  The
+   exit status of the thread is stored in *THREAD_RETURN, if THREAD_RETURN
+   is not NULL.*/
+PHP_FUNCTION(fhreads_join)
+{
+	long thread_id;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "l", &thread_id) == FAILURE) {
+		RETURN_NULL();
 	}
 
-	len = spprintf(&strg, 0, "Congratulations! You have successfully modified ext/%.78s/config.m4. Module %.78s is now compiled into PHP.", "fhreads", arg);
-	RETURN_STRINGL(strg, len, 0);
+	pthread_join((pthread_t)thread_id, NULL);
 }
-/* }}} */
-/* The previous line is meant for vim and emacs, so it can correctly fold and 
-   unfold functions in source code. See the corresponding marks just before 
-   function definition, where the functions purpose is also documented. Please 
-   follow this convention for the convenience of others editing your code.
-*/
-
 
 /* {{{ php_fhreads_init_globals
  */
@@ -142,7 +203,9 @@ PHP_MINFO_FUNCTION(fhreads)
  * Every user visible function must have an entry in fhreads_functions[].
  */
 const zend_function_entry fhreads_functions[] = {
-	PHP_FE(confirm_fhreads_compiled,	NULL)		/* For testing, remove later. */
+	PHP_FE(fhreads_create, 	NULL)
+	PHP_FE(fhreads_join, 	NULL)
+	PHP_FE(fhreads_self, 	NULL)
 	PHP_FE_END	/* Must be the last line in fhreads_functions[] */
 };
 /* }}} */
