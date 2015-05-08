@@ -11,5 +11,5 @@ echo '---' . PHP_EOL . PHP_EOL;
 
 echo 'Calling fhreads_join()' . PHP_EOL;
 var_dump(fhreads_join($threadId));
+echo '---' . PHP_EOL . PHP_EOL;
 
-?>

@@ -46,10 +46,6 @@ PHP_INI_END()
 
 void *fhread_routine (void *arg)
 {
-	/* $this original pointer */
-	zval *this_ptr = NULL,
-	*this = NULL;
-
 	/* init threadsafe manager local storage */
 	void ***tsrm_ls = NULL;
 
@@ -65,25 +61,7 @@ void *fhread_routine (void *arg)
 	/* request startup */
 	php_request_startup(TSRMLS_C);
 
-	ZEG = FHREADS_EG_ALL(TSRMLS_C);
 
-	/*
-	* Allocate $this
-	*/
-	ALLOC_INIT_ZVAL(this);
-
-	/*
-	* Assign $this
-	*/
-	this_ptr = this;
-
-	/**
-	* Thread Block Begin
-	**/
-	zend_first_try {
-
-
-	} zend_end_try();
 
 	/* shutdown request */
 	php_request_shutdown(TSRMLS_C);
@@ -99,14 +77,16 @@ void *fhread_routine (void *arg)
 }
 
 /* {{{ proto fhreads_self()
-	Will return current thread id */
+	Obtain the identifier of the current thread. */
 PHP_FUNCTION(fhreads_self)
 {
 	ZVAL_LONG(return_value, fthread_self());
 }
 
 /* {{{ proto fhreads_create()
-	Will return start a new thread an returns the corresponding thread id */
+   Create a new thread, starting with execution of START-ROUTINE
+   getting passed ARG.  Creation attributed come from ATTR.  The new
+   handle is stored in thread_id which will be returned to php userland. */
 PHP_FUNCTION(fhreads_create)
 {
 	pthread_t thread_id;
@@ -125,12 +105,15 @@ PHP_FUNCTION(fhreads_create)
 PHP_FUNCTION(fhreads_join)
 {
 	long thread_id;
+	int status;
 
 	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "l", &thread_id) == FAILURE) {
 		RETURN_NULL();
 	}
 
-	pthread_join((pthread_t)thread_id, NULL);
+	status = pthread_join((pthread_t)thread_id, NULL);
+
+	RETURN_LONG((long)status);
 }
 
 /* {{{ php_fhreads_init_globals
