@@ -46,8 +46,11 @@ PHP_INI_END()
 
 void *fhread_routine (void *arg)
 {
+	void ***c_tsrm_ls = arg;
+
 	/* init threadsafe manager local storage */
 	void ***tsrm_ls = NULL;
+	void **old_eg_table = NULL;
 
 	/* executor globals */
 	zend_executor_globals *ZEG = NULL;
@@ -58,10 +61,35 @@ void *fhread_routine (void *arg)
 	/* set interpreter context */
 	tsrm_set_interpreter_context(tsrm_ls);
 
+	/* set context the same as parent */
+	SG(server_context) = FHREADS_SG(c_tsrm_ls, server_context);
+
+	/* some php globals */
+	PG(expose_php) = 0;
+	PG(auto_globals_jit) = 0;
+
 	/* request startup */
 	php_request_startup(TSRMLS_C);
 
+	// EG(symbol_table) = FHREADS_EG(c_tsrm_ls, symbol_table);
 
+	zend_eval_string("usleep(300000);", NULL, "thevs1" TSRMLS_CC);
+	zend_eval_string("echo '!';", NULL, "thevs2" TSRMLS_CC);
+
+	/*
+	zend_file_handle script;
+
+	script.type = ZEND_HANDLE_FP;
+	script.filename = "/tmp/testFhread.php";
+	script.opened_path = NULL;
+	script.free_filename = 0;
+
+	if (!(script.handle.fp = fopen(script.filename, "rb"))) {
+		fprintf(stderr, "Unable to open: %s\n", script.filename);
+	}
+
+	php_execute_script(&script TSRMLS_CC);
+	*/
 
 	/* shutdown request */
 	php_request_shutdown(TSRMLS_C);
@@ -93,7 +121,7 @@ PHP_FUNCTION(fhreads_create)
 	void *thread_result;
 	int status;
 
-	status = pthread_create(&thread_id, NULL, fhread_routine, NULL);
+	status = pthread_create(&thread_id, NULL, fhread_routine TSRMLS_CC);
 
 	RETURN_LONG((long)thread_id);
 }

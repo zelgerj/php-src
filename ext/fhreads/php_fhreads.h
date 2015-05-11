@@ -44,6 +44,7 @@ extern zend_module_entry fhreads_module_entry;
 #include <signal.h>
 #endif
 
+#include <main/SAPI.h>
 #include <Zend/zend.h>
 #include <Zend/zend_closures.h>
 #include <Zend/zend_compile.h>
