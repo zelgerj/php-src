@@ -46,6 +46,7 @@ extern zend_module_entry fhreads_module_entry;
 
 #include <main/SAPI.h>
 #include <Zend/zend.h>
+#include <Zend/zend_API.h>
 #include <Zend/zend_closures.h>
 #include <Zend/zend_compile.h>
 #include <Zend/zend_exceptions.h>
@@ -82,6 +83,32 @@ ZEND_END_MODULE_GLOBALS(fhreads)
    encouraged to rename these macros something shorter, see
    examples in any other php module directory.
 */
+
+
+/* {{{ fhread args structure */
+typedef struct _fthread {
+	/**
+	 * Standard Entry
+	 */
+	zend_object std;
+
+	/**
+	 * Thread Identity and LS
+	 */
+	ulong tid;
+	void ***tls;
+
+	/**
+	 * Creator Identity and LS
+	 */
+	ulong cid;
+	void ***cls;
+
+	/**
+	 * Runnable Object Handle
+	 */
+	zend_object_handle handle;
+} FHREAD;
 
 /* {{{ TSRM manipulation */
 #define FHREADS_FETCH_ALL(ls, id, type) ((type) (*((void ***) ls))[TSRM_UNSHUFFLE_RSRC_ID(id)])
