@@ -62,13 +62,15 @@ void *fhread_routine (void *arg)
 	PG(expose_php) = 0;
 	PG(auto_globals_jit) = 0;
 
-	// request startup
-	php_request_startup(TSRMLS_C);
+	// startup
+	init_executor(TSRMLS_C);
 
-	// CG(class_table) = FHREADS_CG(c_tsrm_ls, class_table);
-	// CG(filenames_table) = FHREADS_CG(c_tsrm_ls, filenames_table);
-	// EG(active_symbol_table) = &FHREADS_EG(c_tsrm_ls, symbol_table);
+	/* save context based stuff */
+	zend_objects_store fhread_objects_store = EG(objects_store);
+	HashTable fhread_regular_list = EG(regular_list);
 
+	// point to creator context
+	EG(regular_list) = FHREADS_EG(fhread->c_tsrm_ls, regular_list);
 	EG(objects_store) = FHREADS_EG(fhread->c_tsrm_ls, objects_store);
 
 	// declair runnable zval
@@ -78,18 +80,17 @@ void *fhread_routine (void *arg)
 	// call run method
 	zend_call_method(runnable, Z_OBJCE_P(*runnable), NULL, ZEND_STRL("run"), NULL, 0, NULL, NULL TSRMLS_CC);
 
+	// reset to thread context based stuff for shutdown properly
+	EG(objects_store) = fhread_objects_store;
+	EG(regular_list) = fhread_regular_list;
 
-	shutdown_compiler(TSRMLS_C);
-
-	// shutdown request
-	// php_request_shutdown(TSRMLS_C);
-
-	// free interpreter
-	// tsrm_free_interpreter_context(tsrm_ls);*/
+	// shutdown executor
+	shutdown_executor(TSRMLS_C);
 
 	// free fhread args
 	free(fhread);
 
+	// exit thread
 	pthread_exit(NULL);
 
 #ifdef _WIN32
@@ -97,12 +98,15 @@ void *fhread_routine (void *arg)
 #endif
 }
 
-
+/* {{{ proto fhread_tls_get_id()
+	Obtain the identifier of currents ls context */
 PHP_FUNCTION(fhread_tls_get_id)
 {
 	ZVAL_LONG(return_value, (long)TSRMLS_C);
 }
 
+/* {{{ proto fhread_object_get_handle(object obj)
+	Obtain the identifier of the given objects handle */
 PHP_FUNCTION(fhread_object_get_handle)
 {
 	zval *obj;
@@ -126,22 +130,22 @@ PHP_FUNCTION(fhread_self)
 PHP_FUNCTION(fhread_create)
 {
 	pthread_t thread_id;
-	void *thread_result;
-	int status;
-	FHREAD* fhread = malloc(sizeof(FHREAD));
 	char *gid;
 	int gid_len;
+	int status;
 
 	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &gid, &gid_len) == FAILURE) {
 		RETURN_NULL();
 	}
 
-	// setup fhread args
-	fhread->c_tsrm_ls = TSRMLS_C;
+	// prepare fhread args
+	FHREAD* fhread = malloc(sizeof(FHREAD));
 	fhread->gid = (char *) emalloc(gid_len + 1);
 	fhread->gid_len = gid_len;
-	memcpy(fhread->gid, gid, gid_len);
+	memcpy(fhread->gid, gid, fhread->gid_len);
+	fhread->c_tsrm_ls = TSRMLS_C;
 
+	// create thread
 	status = pthread_create(&thread_id, NULL, fhread_routine, fhread);
 
 	RETURN_LONG((long)thread_id);
@@ -160,6 +164,7 @@ PHP_FUNCTION(fhread_join)
 		RETURN_NULL();
 	}
 
+	// join thread with given id
 	status = pthread_join((pthread_t)thread_id, NULL);
 
 	RETURN_LONG((long)status);
