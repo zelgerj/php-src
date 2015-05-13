@@ -38,4 +38,9 @@ abstract class Thread implements Runnable
             fhread_join($this->getThreadId());
         }
     }
+    
+    public function detach()
+    {
+        unset($GLOBALS[$this->getGlobalsIdentifier()]);
+    }
 }

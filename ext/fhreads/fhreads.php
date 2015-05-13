@@ -27,7 +27,7 @@ class TestThread extends Thread
 $data = new \stdClass();
 $data->counter = 0;
 
-$tMax = 2000;
+$tMax = 10;
 
 for ($i = 1; $i <= $tMax; $i++) {
     $t[$i] = new TestThread($data);
@@ -40,11 +40,11 @@ for ($i = 1; $i <= $tMax; $i++) {
 
 for ($i = 1; $i <= $tMax; $i++) {
     $t[$i]->join();
+    $t[$i]->detach();
+    unset($t[$i]);
 }
 
 var_dump($data);
-
-var_dump($data->counter);
 
 unset($data);
 
