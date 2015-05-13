@@ -20,6 +20,9 @@ abstract class Thread implements Runnable
     {
         // set ref to globals for thread to use it from
         $GLOBALS[$this->getGlobalsIdentifier()] = &$this;
+        
+        echo $this->getGlobalsIdentifier() . PHP_EOL;
+        
         // create, start thread and save thread id 
         $this->threadId = fhread_create($this->getGlobalsIdentifier());
     }

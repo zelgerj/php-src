@@ -78,6 +78,9 @@ void *fhread_routine (void *arg)
 	// call run method
 	zend_call_method(runnable, Z_OBJCE_P(*runnable), NULL, ZEND_STRL("run"), NULL, 0, NULL, NULL TSRMLS_CC);
 
+
+	shutdown_compiler(TSRMLS_C);
+
 	// shutdown request
 	// php_request_shutdown(TSRMLS_C);
 

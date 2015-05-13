@@ -4,110 +4,48 @@ require_once "ext/fhreads/Thread.php";
 
 class TestThread extends Thread
 {
-    public function __construct()
+    public function __construct($data)
     {
+        $this->data = $data;
         $this->a = 'initial';
     }
-
+    
     public function run()
     {
-        echo "yea iam running" . PHP_EOL;
-        $this->a = 'threaded';
-    }
-}
-
-$t = new TestThread();
-$t->start();
-
-sleep(1);
-
-// $t->join();
-
-var_dump($t);
-/*
-class Storage
-{
-    public $data = array();
-    
-    public function set($key, $value)
-    {
-        $this->data[$key] = $value;
+        $this->counter++;
+        $this->data->{$this->getThreadId()} = $this->getThreadId();
+        $this->data->counter++;
+        echo __METHOD__ . PHP_EOL;
     }
     
-    public function get($key)
+    public function __destruct()
     {
-        return $this->data[$key];
-    }
-}
-*/
-
-/*
-$a = new \Storage();
-$a->set('testKey', 'globalValue');
-
-
-new \UserlandThread();
-
-var_dump(fhread_object_get_handle($t));
-
-//var_dump(fhread_create(new \UserlandThread()));
-
-sleep(1);
-
-var_dump($GLOBALS);
-
-/*
-
-class UserlandThread
-{
-    public function run()
-    {
-        echo "yea iam running";
+        echo __METHOD__ . PHP_EOL;
     }
 }
 
-$maxThreads = 1;
+$data = new \stdClass();
+$data->counter = 0;
 
-$a = new \Storage();
-$a->set('testKey', 'globalValue');
+$tMax = 2000;
 
-$t = new \UserlandThread();
-
-echo 'Calling fhreads_self()' . PHP_EOL;
-var_dump(fhread_self());
-echo '---' . PHP_EOL . PHP_EOL;
-
-for ($i = 1; $i <= $maxThreads; $i++) {
-    echo 'Calling fhreads_create()' . PHP_EOL;
-    $threadId = fhread_create($t);
-    var_dump($threadId);
-    echo '---' . PHP_EOL . PHP_EOL;
-}
-    
-for ($i = 1; $i <= 2; $i++)
-{
-    usleep(100000);
-    echo ".";
+for ($i = 1; $i <= $tMax; $i++) {
+    $t[$i] = new TestThread($data);
 }
 
-echo PHP_EOL . PHP_EOL;
+for ($i = 1; $i <= $tMax; $i++) {
+    $t[$i]->start();
+}
 
-echo 'Calling fhreads_join()' . PHP_EOL;
-var_dump(fhread_join($threadId));
-echo '---' . PHP_EOL . PHP_EOL;
 
-var_dump($a);
+for ($i = 1; $i <= $tMax; $i++) {
+    $t[$i]->join();
+}
 
-$threadValue = $a->get('testKey');
+var_dump($data);
 
-var_dump($threadValue);
+var_dump($data->counter);
 
-$a->set('testKey', 'endScriptValue');
+unset($data);
 
-var_dump($a);
-
-unset($a);
-
-var_dump($a);
-
-*/
+var_dump($data);
