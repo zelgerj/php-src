@@ -46,63 +46,67 @@ PHP_INI_END()
 
 void *fhread_routine (void *arg)
 {
-	/* passed the object as argument */
-	FHREAD *fhread;
-	fhread = (FHREAD *) arg;
+	// passed the object as argument
+	FHREAD* fhread = (FHREAD *) arg;
 
-	void ***c_tsrm_ls = fhread->cls;
+	// init threadsafe manager local storage and create new context
+	TSRMLS_D = tsrm_new_interpreter_context();
 
-	/* init threadsafe manager local storage */
-	void ***tsrm_ls = NULL;
+	// set interpreter context
+	tsrm_set_interpreter_context(TSRMLS_C);
 
-	/* create new context */
-	fhread->tls = tsrm_ls = tsrm_new_interpreter_context();
+	// set context the same as parent
+	SG(server_context) = FHREADS_SG(fhread->c_tsrm_ls, server_context);
 
-	/* set interpreter context */
-	tsrm_set_interpreter_context(tsrm_ls);
-
-	/* set context the same as parent */
-	SG(server_context) = FHREADS_SG(c_tsrm_ls, server_context);
-
-	/* some php globals */
+	// some php globals
 	PG(expose_php) = 0;
 	PG(auto_globals_jit) = 0;
 
-	/* request startup */
+	// request startup
 	php_request_startup(TSRMLS_C);
 
-	/*
-	CG(class_table) = FHREADS_CG(c_tsrm_ls, class_table);
-	CG(filenames_table) = FHREADS_CG(c_tsrm_ls, filenames_table);
-	EG(active_symbol_table) = &FHREADS_EG(c_tsrm_ls, symbol_table);
-	 */
+	// CG(class_table) = FHREADS_CG(c_tsrm_ls, class_table);
+	// CG(filenames_table) = FHREADS_CG(c_tsrm_ls, filenames_table);
+	// EG(active_symbol_table) = &FHREADS_EG(c_tsrm_ls, symbol_table);
 
-	EG(objects_store) = FHREADS_EG(c_tsrm_ls, objects_store);
+	EG(objects_store) = FHREADS_EG(fhread->c_tsrm_ls, objects_store);
 
-	zval **aa;
-	zend_hash_find(&FHREADS_EG(c_tsrm_ls, symbol_table), "a", sizeof("a"), (void**)&aa);
+	// declair runnable zval
+	zval **runnable;
+	// get runnable from creator symbol table
+	zend_hash_find(&FHREADS_EG(fhread->c_tsrm_ls, symbol_table), fhread->gid, fhread->gid_len + 1, (void**)&runnable);
+	// call run method
+	zend_call_method(runnable, Z_OBJCE_P(*runnable), NULL, ZEND_STRL("run"), NULL, 0, NULL, NULL TSRMLS_CC);
 
-	/*
-	MAKE_STD_ZVAL(*aa);
-	Z_TYPE_P(*aa) = IS_OBJECT;
-	Z_OBJ_HANDLE_P(*aa) = handle;
-	*/
-
-	ZEND_SET_SYMBOL(&EG(symbol_table), "a", *aa);
-
-	zend_eval_string("include 'ext/fhreads/runnable.php';", NULL, "thevs1" TSRMLS_CC);
-
-	/* shutdown request */
+	// shutdown request
 	// php_request_shutdown(TSRMLS_C);
 
-	/* free interpreter */
-	// tsrm_free_interpreter_context(tsrm_ls);
+	// free interpreter
+	// tsrm_free_interpreter_context(tsrm_ls);*/
+
+	// free fhread args
+	free(fhread);
 
 	pthread_exit(NULL);
 
 #ifdef _WIN32
 	return NULL; /* silence MSVC compiler */
 #endif
+}
+
+
+PHP_FUNCTION(fhread_tls_get_id)
+{
+	ZVAL_LONG(return_value, (long)TSRMLS_C);
+}
+
+PHP_FUNCTION(fhread_object_get_handle)
+{
+	zval *obj;
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "z", &obj) == FAILURE) {
+		RETURN_NULL();
+	}
+	ZVAL_LONG(return_value, Z_OBJ_HANDLE_P(obj));
 }
 
 /* {{{ proto fhread_self()
@@ -121,15 +125,23 @@ PHP_FUNCTION(fhread_create)
 	pthread_t thread_id;
 	void *thread_result;
 	int status;
-	FHREAD *fhread = malloc(sizeof(FHREAD));
+	FHREAD* fhread = malloc(sizeof(FHREAD));
+	char *gid;
+	int gid_len;
 
-	// setup thread args for fhread routine
-	fhread->tls = TSRMLS_C;
-	fhread->cid = pthread_self();
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &gid, &gid_len) == FAILURE) {
+		RETURN_NULL();
+	}
 
-	status = pthread_create(&fhread->tid, NULL, fhread_routine, (void *) &fhread);
+	// setup fhread args
+	fhread->c_tsrm_ls = TSRMLS_C;
+	fhread->gid = (char *) emalloc(gid_len + 1);
+	fhread->gid_len = gid_len;
+	memcpy(fhread->gid, gid, gid_len);
 
-	RETURN_LONG((long)fhread->cid);
+	status = pthread_create(&thread_id, NULL, fhread_routine, fhread);
+
+	RETURN_LONG((long)thread_id);
 }
 
 /* {{{ proto fhread_join()
@@ -220,9 +232,11 @@ PHP_MINFO_FUNCTION(fhreads)
  * Every user visible function must have an entry in fhreads_functions[].
  */
 const zend_function_entry fhreads_functions[] = {
+	PHP_FE(fhread_tls_get_id, NULL)
+	PHP_FE(fhread_object_get_handle, NULL)
+	PHP_FE(fhread_self, 	NULL)
 	PHP_FE(fhread_create, 	NULL)
 	PHP_FE(fhread_join, 	NULL)
-	PHP_FE(fhread_self, 	NULL)
 	PHP_FE_END	/* Must be the last line in fhreads_functions[] */
 };
 /* }}} */

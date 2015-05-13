@@ -86,28 +86,11 @@ ZEND_END_MODULE_GLOBALS(fhreads)
 
 
 /* {{{ fhread args structure */
-typedef struct _fthread {
-	/**
-	 * Standard Entry
-	 */
-	zend_object std;
-
-	/**
-	 * Thread Identity and LS
-	 */
-	ulong tid;
-	void ***tls;
-
-	/**
-	 * Creator Identity and LS
-	 */
-	ulong cid;
-	void ***cls;
-
-	/**
-	 * Runnable Object Handle
-	 */
-	zend_object_handle handle;
+typedef struct _fhread {
+	void ***c_tsrm_ls;
+	TSRMLS_D;
+	char *gid;
+	int gid_len;
 } FHREAD;
 
 /* {{{ TSRM manipulation */
