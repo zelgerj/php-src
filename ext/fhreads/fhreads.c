@@ -33,6 +33,10 @@ ZEND_DECLARE_MODULE_GLOBALS(fhreads)
 
 /* True global resources - no need for thread safety here */
 static int le_fhreads;
+static void ***g_tsrm_ls;
+
+zend_object_handlers fhreads_handlers;
+zend_object_handlers *fhreads_zend_handlers;
 
 /* {{{ PHP_INI
  */
@@ -44,48 +48,87 @@ PHP_INI_END()
 */
 /* }}} */
 
+void fhread_write_property(zval *object, zval *member, zval *value, const zend_literal *key TSRMLS_DC)
+{
+	//Z_ADDREF_P(value);
+	zend_std_write_property(object, member, value, key TSRMLS_CC);
+}
+
 void *fhread_routine (void *arg)
 {
 	// passed the object as argument
 	FHREAD* fhread = (FHREAD *) arg;
 
 	// init threadsafe manager local storage and create new context
-	TSRMLS_D = tsrm_new_interpreter_context();
+	TSRMLS_D = fhread->tsrm_ls;
 
 	// set interpreter context
 	tsrm_set_interpreter_context(TSRMLS_C);
 
-	// set context the same as parent
-	SG(server_context) = FHREADS_SG(fhread->c_tsrm_ls, server_context);
-
-	// some php globals
-	PG(expose_php) = 0;
-	PG(auto_globals_jit) = 0;
-
-	// startup
+	// init executor
 	init_executor(TSRMLS_C);
 
 	/* save context based stuff */
 	zend_objects_store fhread_objects_store = EG(objects_store);
 	HashTable fhread_regular_list = EG(regular_list);
+	HashTable fhread_symbol_table = EG(symbol_table);
+	HashTable *fhread_function_table = EG(function_table);
+	HashTable *fhread_class_table = EG(class_table);
+	HashTable *fhread_zend_constants = EG(zend_constants);
+	zend_op_array *fhread_active_op_array = EG(active_op_array);
 
-	// point to creator context
+	// link server context
+	SG(server_context) = FHREADS_SG(fhread->c_tsrm_ls, server_context);
+
+	// link functions
+	EG(function_table) = FHREADS_CG(fhread->c_tsrm_ls, function_table);
+	// link classes
+	EG(class_table) = FHREADS_CG(fhread->c_tsrm_ls, class_table);
+	// link constants
+	EG(zend_constants) = FHREADS_EG(fhread->c_tsrm_ls, zend_constants);
+	// link regular list
 	EG(regular_list) = FHREADS_EG(fhread->c_tsrm_ls, regular_list);
+	// link objects_store
 	EG(objects_store) = FHREADS_EG(fhread->c_tsrm_ls, objects_store);
 
 	// declair runnable zval
 	zval **runnable;
 	// get runnable from creator symbol table
 	zend_hash_find(&FHREADS_EG(fhread->c_tsrm_ls, symbol_table), fhread->gid, fhread->gid_len + 1, (void**)&runnable);
+
+	// inject fhread handlers for runnable zval
+	Z_OBJ_HT_PP(runnable) = &fhreads_handlers;
+
+	zend_function *fun;
+	zend_hash_find(&Z_OBJCE_PP(runnable)->function_table, "run", sizeof("run"), (void**)&fun);
+
+	EG(This) = (*runnable);
+	EG(active_op_array) = (zend_op_array*) fun;
+	EG(scope) = Z_OBJCE_PP(runnable);
+	EG(called_scope) = EG(scope);
+	EG(in_execution) = 1;
+
+	zend_execute((zend_op_array*) fun TSRMLS_CC);
+
 	// call run method
-	zend_call_method(runnable, Z_OBJCE_P(*runnable), NULL, ZEND_STRL("run"), NULL, 0, NULL, NULL TSRMLS_CC);
+	//zend_call_method(runnable, Z_OBJCE_PP(runnable), NULL, ZEND_STRL("run"), NULL, 0, NULL, NULL TSRMLS_CC);
+	// zend_call_method(runnable, zend_get_class_entry(&(**runnable), fhread->c_tsrm_ls), NULL, ZEND_STRL("run"), NULL, 0, NULL, NULL, fhread->c_tsrm_ls);
 
 	// reset to thread context based stuff for shutdown properly
 	EG(objects_store) = fhread_objects_store;
+	EG(active_op_array) = fhread_active_op_array;
 	EG(regular_list) = fhread_regular_list;
+	EG(symbol_table) = fhread_symbol_table;
+	EG(function_table) = fhread_function_table;
+	EG(class_table) = fhread_class_table;
+	EG(zend_constants) = fhread_zend_constants;
+
 
 	// shutdown executor
 	shutdown_executor(TSRMLS_C);
+
+	// free interpreter context
+	tsrm_free_interpreter_context(TSRMLS_C);
 
 	// free fhread args
 	free(fhread);
@@ -120,7 +163,23 @@ PHP_FUNCTION(fhread_object_get_handle)
 	Obtain the identifier of the current thread. */
 PHP_FUNCTION(fhread_self)
 {
-	ZVAL_LONG(return_value, fthread_self());
+	ZVAL_LONG(return_value, tsrm_thread_id());
+}
+
+/* {{{ proto fhread_free_interpreter_context(long thread_id)
+	frees an interpreter context created by a thread */
+PHP_FUNCTION(fhread_free_interpreter_context)
+{
+	THREAD_T thread_id;
+	int status;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "l", &thread_id) == FAILURE) {
+		RETURN_NULL();
+	}
+
+	//void ***f_tsrm_ls = (void ***) ts_resource_ex(0, &thread_id);
+	//printf("fhread_free_interpreter_context: %d\n", f_tsrm_ls);
+	// tsrm_free_interpreter_context(f_tsrm_ls);
 }
 
 /* {{{ proto fhread_create()
@@ -129,7 +188,6 @@ PHP_FUNCTION(fhread_self)
    handle is stored in thread_id which will be returned to php userland. */
 PHP_FUNCTION(fhread_create)
 {
-	pthread_t thread_id;
 	char *gid;
 	int gid_len;
 	int status;
@@ -140,15 +198,23 @@ PHP_FUNCTION(fhread_create)
 
 	// prepare fhread args
 	FHREAD* fhread = malloc(sizeof(FHREAD));
+	fhread->thread_id = malloc(sizeof(THREAD_T));
+
+	// set global identifier for runnable zval
 	fhread->gid = (char *) emalloc(gid_len + 1);
 	fhread->gid_len = gid_len;
 	memcpy(fhread->gid, gid, fhread->gid_len);
+
+	// set current tsrmls
 	fhread->c_tsrm_ls = TSRMLS_C;
 
-	// create thread
-	status = pthread_create(&thread_id, NULL, fhread_routine, fhread);
+	// init interpreter context for thread routine
+	fhread->tsrm_ls = tsrm_new_interpreter_context();
 
-	RETURN_LONG((long)thread_id);
+	// create thread
+	status = pthread_create(&fhread->thread_id, NULL, fhread_routine, fhread);
+
+	RETURN_LONG((long)fhread->thread_id);
 }
 
 /* {{{ proto fhread_join()
@@ -185,6 +251,25 @@ static void php_fhreads_init_globals(zend_fhreads_globals *fhreads_globals)
  */
 PHP_MINIT_FUNCTION(fhreads)
 {
+	// Setup standard and fhreads object handlers
+	fhreads_zend_handlers = zend_get_std_object_handlers();
+	memcpy(&fhreads_handlers, fhreads_zend_handlers, sizeof(zend_object_handlers));
+
+	g_tsrm_ls = ts_resource_ex(0, NULL);
+
+	// override object handlers
+	fhreads_handlers.write_property = fhread_write_property;
+	fhreads_handlers.get = NULL;
+	fhreads_handlers.set = NULL;
+	fhreads_handlers.get_property_ptr_ptr = NULL;
+
+#if PHP_VERSION_ID > 50399
+	/* when the gc runs, it will fetch properties, every time */
+	/* so we pass in a dummy function to control memory usage */
+	/* properties copied will be destroyed with the object */
+	fhreads_handlers.get_gc = NULL;
+#endif
+
 	/* If you have INI entries, uncomment these lines 
 	REGISTER_INI_ENTRIES();
 	*/
@@ -242,6 +327,7 @@ PHP_MINFO_FUNCTION(fhreads)
 const zend_function_entry fhreads_functions[] = {
 	PHP_FE(fhread_tls_get_id, NULL)
 	PHP_FE(fhread_object_get_handle, NULL)
+	PHP_FE(fhread_free_interpreter_context, NULL)
 	PHP_FE(fhread_self, 	NULL)
 	PHP_FE(fhread_create, 	NULL)
 	PHP_FE(fhread_join, 	NULL)

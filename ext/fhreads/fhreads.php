@@ -2,56 +2,85 @@
 
 require_once "ext/fhreads/Thread.php";
 
+class TestObject
+{
+    public function __construct() {
+        // echo __METHOD__ . PHP_EOL;
+    }
+    
+    public function __destruct() {
+        // echo __METHOD__ . PHP_EOL;
+    }
+}
+
 class TestThread extends Thread
 {
-    public function __construct($data, &$array)
+    public function __construct()
     {
+        /*
         $this->array = &$array;
         $this->data = $data;
         $this->a = 'initial';
+        */
     }
     
     public function run()
     {
+        $test = 'test';
+        $this->asdf = 'adsf';
+        
+        /*
+        //usleep(rand(100,200));
+        
+        $this->testInt = 123;
+        $this->testStr = 'test';
+        $this->testFloat = 1.234;
+        $this->testBool = true;
+        $this->testArray = array('a' => 'b');
+        $this->testObj = new TestObject();
+        
+        $this->a->value = 'test';
+        $this->a->{$this->getThreadId()} = $this->getThreadId();
+        */
+        /*
         $this->counter++;
+        usleep(100);
         $this->data->{$this->getThreadId()} = $this->getThreadId();
         $this->data->array[] = $this->getThreadId();
         $this->data->counter++;
-        echo __METHOD__ . PHP_EOL;
-    }
-    
-    public function __destruct()
-    {
+        */
         echo __METHOD__ . PHP_EOL;
     }
 }
 
-$data = new \stdClass();
-$data->counter = 0;
-$data->resource = stream_socket_server("tcp://0.0.0.0:8000", $errno, $errstr);
-$data->array = array('a' => 'a');
+$t = new TestThread();
+$t->start();
+$t->join();
 
-$array = array('a' => 'a');
+// var_dump($t);
+/*
 
-$tMax = 10;
+$t = array();
+$tMax = 100;
 
+$a = new stdClass();
+$a->value = 'inital';
+d
 for ($i = 1; $i <= $tMax; $i++) {
-    $t[$i] = new TestThread($data, $array);
+    $t[$i] = new TestThread($a);
 }
 
 for ($i = 1; $i <= $tMax; $i++) {
     $t[$i]->start();
 }
 
-
 for ($i = 1; $i <= $tMax; $i++) {
     $t[$i]->join();
-    $t[$i]->detach();
-    unset($t[$i]);
 }
 
-var_dump($data);
+var_dump($a);
 
-unset($data);
+*/
 
-var_dump($data);
+
+echo PHP_EOL . "finished script!" . PHP_EOL;

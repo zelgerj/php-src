@@ -437,7 +437,6 @@ void *tsrm_new_interpreter_context(void)
 	return tsrm_set_interpreter_context(current);
 }
 
-
 /* frees all resources allocated for the current thread */
 void ts_free_thread(void)
 {

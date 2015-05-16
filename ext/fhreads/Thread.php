@@ -43,4 +43,9 @@ abstract class Thread implements Runnable
     {
         unset($GLOBALS[$this->getGlobalsIdentifier()]);
     }
+    
+    public function __destruct()
+    {
+        // echo __METHOD__ . PHP_EOL;
+    }
 }

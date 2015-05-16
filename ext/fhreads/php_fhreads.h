@@ -87,11 +87,17 @@ ZEND_END_MODULE_GLOBALS(fhreads)
 
 /* {{{ fhread args structure */
 typedef struct _fhread {
+	THREAD_T thread_id;
 	void ***c_tsrm_ls;
 	TSRMLS_D;
 	char *gid;
 	int gid_len;
 } FHREAD;
+
+void fhread_write_property(zval *object, zval *member, zval *value, const zend_literal *key TSRMLS_DC);
+
+/* frees all resources allocated for the current thread */
+void fhread_ts_free_thread(THREAD_T thread_id);
 
 /* {{{ TSRM manipulation */
 #define FHREADS_FETCH_ALL(ls, id, type) ((type) (*((void ***) ls))[TSRM_UNSHUFFLE_RSRC_ID(id)])
@@ -108,17 +114,6 @@ typedef struct _fhread {
 #else
 #define FHREADS_G(v) (fhreads_globals.v)
 #endif
-
-/* {{{ pthread_self wrapper */
-static inline ulong fthread_self() {
-#ifdef _WIN32
-	return (ulong) GetCurrentThreadId();
-#else
-	return (ulong) pthread_self();
-#endif
-} /* }}} */
-
-
 
 #endif	/* PHP_FHREADS_H */
 
