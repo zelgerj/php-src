@@ -47,8 +47,11 @@ extern zend_module_entry fhreads_module_entry;
 #include <main/SAPI.h>
 #include <Zend/zend.h>
 #include <Zend/zend_API.h>
+#include <Zend/zend_alloc.h>
+#include <Zend/zend_operators.h>
 #include <Zend/zend_closures.h>
 #include <Zend/zend_compile.h>
+#include <Zend/zend_execute.h>
 #include <Zend/zend_exceptions.h>
 #include <Zend/zend_extensions.h>
 #include <Zend/zend_globals.h>
@@ -58,6 +61,10 @@ extern zend_module_entry fhreads_module_entry;
 #include <Zend/zend_list.h>
 #include <Zend/zend_object_handlers.h>
 #include <Zend/zend_variables.h>
+#include <Zend/zend_ptr_stack.h>
+#include <Zend/zend_constants.h>
+#include <Zend/zend_closures.h>
+#include <Zend/zend_generators.h>
 #include <Zend/zend_vm.h>
 
 #ifdef ZTS
@@ -92,9 +99,14 @@ typedef struct _fhread {
 	TSRMLS_D;
 	char *gid;
 	int gid_len;
+	zend_function *run;
+	zval **runnable;
+	zend_mm_heap *mm_heap;
 } FHREAD;
 
+
 void fhread_write_property(zval *object, zval *member, zval *value, const zend_literal *key TSRMLS_DC);
+void fhread_init_executor(TSRMLS_D);
 
 /* frees all resources allocated for the current thread */
 void fhread_ts_free_thread(THREAD_T thread_id);
@@ -102,6 +114,7 @@ void fhread_ts_free_thread(THREAD_T thread_id);
 /* {{{ TSRM manipulation */
 #define FHREADS_FETCH_ALL(ls, id, type) ((type) (*((void ***) ls))[TSRM_UNSHUFFLE_RSRC_ID(id)])
 #define FHREADS_FETCH_CTX(ls, id, type, element) (((type) (*((void ***) ls))[TSRM_UNSHUFFLE_RSRC_ID(id)])->element)
+#define FHREADS_AG(ls, v) FHREADS_FETCH_CTX(ls, alloc_globals_id, zend_alloc_globals*, v)
 #define FHREADS_CG(ls, v) FHREADS_FETCH_CTX(ls, compiler_globals_id, zend_compiler_globals*, v)
 #define FHREADS_CG_ALL(ls) FHREADS_FETCH_ALL(ls, compiler_globals_id, zend_compiler_globals*)
 #define FHREADS_EG(ls, v) FHREADS_FETCH_CTX(ls, executor_globals_id, zend_executor_globals*, v)

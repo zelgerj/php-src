@@ -219,6 +219,8 @@ static zend_never_inline zval **_get_zval_cv_lookup_BP_VAR_R(zval ***ptr, zend_u
 {
 	zend_compiled_variable *cv = &CV_DEF_OF(var);
 
+	printf("active_symbol_table\n");
+
 	if (!EG(active_symbol_table) ||
 	    zend_hash_quick_find(EG(active_symbol_table), cv->name, cv->name_len+1, cv->hash_value, (void **)ptr)==FAILURE) {
 		zend_error(E_NOTICE, "Undefined variable: %s", cv->name);
@@ -270,6 +272,8 @@ static zend_never_inline zval **_get_zval_cv_lookup_BP_VAR_RW(zval ***ptr, zend_
 static zend_never_inline zval **_get_zval_cv_lookup_BP_VAR_W(zval ***ptr, zend_uint var TSRMLS_DC)
 {
 	zend_compiled_variable *cv = &CV_DEF_OF(var);
+
+	printf("here iam\n");
 
 	if (!EG(active_symbol_table)) {
 		Z_ADDREF(EG(uninitialized_zval));

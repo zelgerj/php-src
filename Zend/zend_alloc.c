@@ -1877,6 +1877,8 @@ static zend_mm_free_block *zend_mm_search_large_block(zend_mm_heap *heap, size_t
 	return best_fit->next_free_block;
 }
 
+pthread_mutex_t	alloc_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 static void *_zend_mm_alloc_int(zend_mm_heap *heap, size_t size ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC)
 {
 	zend_mm_free_block *best_fit;
@@ -1892,6 +1894,8 @@ static void *_zend_mm_alloc_int(zend_mm_heap *heap, size_t size ZEND_FILE_LINE_D
 
 	HANDLE_BLOCK_INTERRUPTIONS();
 
+	// pthread_mutex_lock(&alloc_mutex);
+
 	if (EXPECTED(ZEND_MM_SMALL_SIZE(true_size))) {
 		size_t index = ZEND_MM_BUCKET_INDEX(true_size);
 		size_t bitmap;
@@ -1901,6 +1905,7 @@ static void *_zend_mm_alloc_int(zend_mm_heap *heap, size_t size ZEND_FILE_LINE_D
 		}
 #if ZEND_MM_CACHE
 		if (EXPECTED(heap->cache[index] != NULL)) {
+
 			/* Get block from cache */
 #if ZEND_MM_CACHE_STAT
 			heap->cache_stat[index].count--;
@@ -1912,6 +1917,9 @@ static void *_zend_mm_alloc_int(zend_mm_heap *heap, size_t size ZEND_FILE_LINE_D
 			ZEND_MM_CHECK_MAGIC(best_fit, MEM_BLOCK_CACHED);
 			ZEND_MM_SET_DEBUG_INFO(best_fit, size, 1, 0);
 			HANDLE_UNBLOCK_INTERRUPTIONS();
+
+			// pthread_mutex_unlock(&alloc_mutex);
+
 			return ZEND_MM_DATA_OF(best_fit);
  		}
 #if ZEND_MM_CACHE_STAT
@@ -1993,6 +2001,8 @@ out_of_memory:
 #else
 			zend_mm_safe_error(heap, "Out of memory (allocated %ld) (tried to allocate %lu bytes)", heap->real_size, size);
 #endif
+
+			// pthread_mutex_unlock(&alloc_mutex);
 			return NULL;
 		}
 
@@ -2052,6 +2062,8 @@ zend_mm_finished_searching_for_block:
 	}
 
 	HANDLE_UNBLOCK_INTERRUPTIONS();
+
+	// pthread_mutex_unlock(&alloc_mutex);
 
 	return ZEND_MM_DATA_OF(best_fit);
 }

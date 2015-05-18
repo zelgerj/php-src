@@ -15,6 +15,8 @@ class TestObject
 
 class TestThread extends Thread
 {
+    public $test = 'test';
+    
     public function __construct()
     {
         /*
@@ -26,8 +28,8 @@ class TestThread extends Thread
     
     public function run()
     {
-        $test = 'test';
-        $this->asdf = 'adsf';
+        // $v = 'asdf';
+        $this->inside = 'inside';
         
         /*
         //usleep(rand(100,200));
@@ -53,34 +55,32 @@ class TestThread extends Thread
     }
 }
 
+/*
 $t = new TestThread();
+$t->outside = 'outside';
 $t->start();
 $t->join();
-
-// var_dump($t);
-/*
-
-$t = array();
-$tMax = 100;
-
-$a = new stdClass();
-$a->value = 'inital';
-d
-for ($i = 1; $i <= $tMax; $i++) {
-    $t[$i] = new TestThread($a);
-}
-
-for ($i = 1; $i <= $tMax; $i++) {
-    $t[$i]->start();
-}
-
-for ($i = 1; $i <= $tMax; $i++) {
-    $t[$i]->join();
-}
-
-var_dump($a);
-
 */
 
+$ths = array();
+$tMax = 100;
+
+for ($i = 1; $i <= $tMax; $i++) {
+    $ths[$i] = new TestThread();
+}
+
+for ($i = 1; $i <= $tMax; $i++) {
+    $ths[$i]->start();
+}
+
+for ($i = 1; $i <= $tMax; $i++) {
+    $ths[$i]->join();
+}
+
+$t = $ths[1];
+echo 'Try to get $t->inside' . PHP_EOL;
+$a = $t->inside;
+var_dump($a);
 
 echo PHP_EOL . "finished script!" . PHP_EOL;
+
