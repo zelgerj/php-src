@@ -48,6 +48,7 @@ PHP_INI_END()
 
 void fhread_write_property(zval *object, zval *member, zval *value, const zend_literal *key TSRMLS_DC)
 {
+	Z_ADDREF_P(value);
 	zend_std_write_property(object, member, value, key TSRMLS_CC);
 }
 
@@ -90,7 +91,6 @@ void *fhread_routine (void *arg)
 	EG(regular_list) = FHREADS_EG(fhread->c_tsrm_ls, regular_list);
 	// link objects_store
 	EG(objects_store) = FHREADS_EG(fhread->c_tsrm_ls, objects_store);
-
 
 	// init executor globals for function run to execute
 	EG(This) = (*fhread->runnable);
@@ -180,26 +180,27 @@ PHP_FUNCTION(fhread_create)
 	}
 
 	// check if fhread was alreade prepared for gid
-	if (zend_hash_find(&FHREADS_G(fhreads), gid, gid_len + 1, (void*)&fhread) != SUCCESS) {
+	if (zend_hash_find(&FHREADS_G(fhreads), gid, gid_len + 1, (void **)&fhread)  == FAILURE) {
 		// prepare fhread
-		fhread = malloc(sizeof(FHREAD));
+		fhread = (FHREAD *)malloc(sizeof(FHREAD));
 		fhread->executor_inited = 0;
 		// set creator tsrm ls
 		fhread->c_tsrm_ls = TSRMLS_C;
 		// create new tsrm ls for thread routine
 		fhread->tsrm_ls = tsrm_new_interpreter_context();
-		// get runnable zval from creator symbol table
-		zend_hash_find(&EG(symbol_table), gid, gid_len + 1, (void**)&fhread->runnable);
-		// get run function from function table
-		zend_hash_find(&Z_OBJCE_PP(fhread->runnable)->function_table, "run", sizeof("run"), (void**)&fhread->run);
 		// add to globals hash
-		zend_hash_add(&FHREADS_G(fhreads), gid, gid_len + 1, (void*)&fhread, sizeof(FHREAD), NULL);
-		printf("CREATE gid %s\n", gid);
+		zend_hash_add(&FHREADS_G(fhreads), gid, gid_len + 1, (void*)fhread, sizeof(FHREAD), NULL);
 	}
 
-	// create thread
-	status = pthread_create(&fhread->thread_id, NULL, fhread_routine, fhread);
+	// get runnable zval from creator symbol table
+	zend_hash_find(&EG(symbol_table), gid, gid_len + 1, (void**)&fhread->runnable);
+	// inject fhread handlers for runnable zval
+	Z_OBJ_HT_PP(fhread->runnable) = &fhreads_handlers;
+	// get run function from function table
+	zend_hash_find(&Z_OBJCE_PP(fhread->runnable)->function_table, "run", sizeof("run"), (void**)&fhread->run);
 
+	// create thread and start fhread__routine
+	status = pthread_create(&fhread->thread_id, NULL, fhread_routine, fhread);
 
 	// return thread id
 	RETURN_LONG((long)fhread->thread_id);

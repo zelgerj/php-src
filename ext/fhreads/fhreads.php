@@ -20,25 +20,26 @@ class TestThread extends Thread
     public function __construct($data)
     {
         $this->data = $data;
+        $this->testObjArray = array();
     }
     
     public function run()
     {      
         $this->testInt = 123;
+        usleep(rand(1000,20000));
         $this->testStr = 'test';
+        usleep(rand(1000,20000));
         $this->testFloat = 1.234;
+        usleep(rand(1000,20000));
         $this->testBool = true;
+        usleep(rand(1000,20000));
         $this->testArray = array('a' => 'b');
+        usleep(rand(1000,20000));
         $this->testObj = new TestObject();
-
-        /*
-        $this->counter++;
-        usleep(100);
-        $this->data->{$this->getThreadId()} = $this->getThreadId();
-        $this->data->array[] = $this->getThreadId();
-        $this->data->counter++;
-        */
-        echo __METHOD__ . PHP_EOL;
+        $this->testObjArray[] = new TestObject();
+        $this->testObjArray[0]->haha = 'haha';
+        usleep(rand(1000,20000));
+        //$this->data->{$this->getThreadId()} = $this->getThreadId();
     }
 }
 
@@ -63,34 +64,33 @@ $t->join();
 $data = new \stdClass();
 
 $ths = array();
-$tMax = 10;
+$tMax = 1000;
 
 $ctxCount = 1;
 
-while(1) {
+
 for ($i = 1; $i <= $tMax; $i++) {
     $ths[$i] = new TestThread($data);
 }
 
-for ($i = 1; $i <= $tMax; $i++) {
-    $ths[$i]->start();
+while(1) {
+
+    
+    for ($i = 1; $i <= $tMax; $i++) {
+        $ths[$i]->start();
+    }
+    
+    for ($i = 1; $i <= $tMax; $i++) {
+        $ths[$i]->join();
+    }
+    
+    echo "$tMax threads finished, restarting..." . PHP_EOL;
+    var_dump($ths[$tMax]);
+
+sleep(1);
+
 }
 
-for ($i = 1; $i <= $tMax; $i++) {
-    $ths[$i]->join();
-}
-
-for ($i = 1; $i <= $tMax; $i++) {
-    $ths[$i]->detach();
-    unset($ths[$i]);
-}
-
-sleep(2);
-
-}
-
-
-var_dump($data);
 
 echo PHP_EOL . "finished script!" . PHP_EOL;
 

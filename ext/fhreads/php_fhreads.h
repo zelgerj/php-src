@@ -108,19 +108,6 @@ void fhread_ts_free_thread(THREAD_T thread_id);
 
 #endif	/* PHP_FHREADS_H */
 
-struct _zend_mm_heap {
-	int   use_zend_alloc;
-	void *(*_malloc)(size_t);
-	void  (*_free)(void *);
-	void *(*_realloc)(void *, size_t);
-	size_t              free_bitmap;
-	size_t              large_free_bitmap;
-	size_t              block_size;
-	size_t              compact_size;
-	zend_mm_segment    *segments_list;
-	zend_mm_storage    *storage;
-};
-
 
 /*
  * Local variables:
