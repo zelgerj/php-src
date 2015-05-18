@@ -273,8 +273,6 @@ static zend_never_inline zval **_get_zval_cv_lookup_BP_VAR_W(zval ***ptr, zend_u
 {
 	zend_compiled_variable *cv = &CV_DEF_OF(var);
 
-	printf("here iam\n");
-
 	if (!EG(active_symbol_table)) {
 		Z_ADDREF(EG(uninitialized_zval));
 		*ptr = (zval**)EX_CV_NUM(EG(current_execute_data), EG(active_op_array)->last_var + var);

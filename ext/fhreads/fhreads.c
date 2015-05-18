@@ -27,35 +27,14 @@
 #include "ext/standard/info.h"
 #include "php_fhreads.h"
 
-/* If you declare any globals in php_fhreads.h uncomment this:
 ZEND_DECLARE_MODULE_GLOBALS(fhreads)
-*/
-
-
-typedef struct _zend_alloc_globals {
-	zend_mm_heap *mm_heap;
-} zend_alloc_globals;
-
-#ifdef ZTS
-
-# define AG(v) TSRMG(alloc_globals_id, zend_alloc_globals *, v)
-#else
-# define AG(v) (alloc_globals.v)
-static zend_alloc_globals alloc_globals;
-#endif
-
-
-#define Z_OBJ_PP(zval_p) \
-	((zend_object*)(EG(objects_store).object_buckets[Z_OBJ_HANDLE_PP(zval_p)].bucket.obj.object))
-
 
 /* True global resources - no need for thread safety here */
 static int le_fhreads;
-static void ***g_tsrm_ls;
-static zend_mm_heap *g_mm_heap;
 
 zend_object_handlers fhreads_handlers;
 zend_object_handlers *fhreads_zend_handlers;
+
 
 /* {{{ PHP_INI
  */
@@ -72,83 +51,10 @@ void fhread_write_property(zval *object, zval *member, zval *value, const zend_l
 	zend_std_write_property(object, member, value, key TSRMLS_CC);
 }
 
-static void zend_extension_activator(zend_extension *extension TSRMLS_DC) /* {{{ */
-{
-	if (extension->activate) {
-		extension->activate();
-	}
-}
-
-void fhread_init_executor(TSRMLS_D) /* {{{ */
-{
-	zend_init_fpu(TSRMLS_C);
-
-	INIT_ZVAL(EG(uninitialized_zval));
-	/* trick to make uninitialized_zval never be modified, passed by ref, etc. */
-	Z_ADDREF(EG(uninitialized_zval));
-	INIT_ZVAL(EG(error_zval));
-	EG(uninitialized_zval_ptr)=&EG(uninitialized_zval);
-	EG(error_zval_ptr)=&EG(error_zval);
-/* destroys stack frame, therefore makes core dumps worthless */
-#if 0&&ZEND_DEBUG
-	original_sigsegv_handler = signal(SIGSEGV, zend_handle_sigsegv);
-#endif
-	EG(return_value_ptr_ptr) = NULL;
-
-	EG(symtable_cache_ptr) = EG(symtable_cache) - 1;
-	EG(symtable_cache_limit) = EG(symtable_cache) + SYMTABLE_CACHE_SIZE - 1;
-	EG(no_extensions) = 0;
-
-	EG(function_table) = CG(function_table);
-	EG(class_table) = CG(class_table);
-
-	EG(in_execution) = 0;
-	EG(in_autoload) = NULL;
-	EG(autoload_func) = NULL;
-	EG(error_handling) = EH_NORMAL;
-
-	zend_vm_stack_init(TSRMLS_C);
-	zend_vm_stack_push((void *) NULL TSRMLS_CC);
-
-	// zend_hash_init(&EG(symbol_table), 50, NULL, ZVAL_PTR_DTOR, 0);
-	// EG(active_symbol_table) = &EG(symbol_table);
-
-	zend_llist_apply(&zend_extensions, (llist_apply_func_t) zend_extension_activator TSRMLS_CC);
-	EG(opline_ptr) = NULL;
-
-	zend_hash_init(&EG(included_files), 5, NULL, NULL, 0);
-
-	EG(ticks_count) = 0;
-
-	EG(user_error_handler) = NULL;
-
-	EG(current_execute_data) = NULL;
-
-	zend_stack_init(&EG(user_error_handlers_error_reporting));
-	zend_ptr_stack_init(&EG(user_error_handlers));
-	zend_ptr_stack_init(&EG(user_exception_handlers));
-
-	// zend_objects_store_init(&EG(objects_store), 1024);
-
-	EG(full_tables_cleanup) = 0;
-#ifdef ZEND_WIN32
-	EG(timed_out) = 0;
-#endif
-
-	EG(exception) = NULL;
-	EG(prev_exception) = NULL;
-
-	EG(scope) = NULL;
-	EG(called_scope) = NULL;
-
-	EG(This) = NULL;
-
-	EG(active_op_array) = NULL;
-
-	EG(active) = 1;
-	EG(start_op) = NULL;
-}
-/* }}} */
+/* {{{ */
+void fhreads_global_free(FHREAD *fhread) {
+   //free(&fhread);
+} /* }}} */
 
 void *fhread_routine (void *arg)
 {
@@ -164,80 +70,50 @@ void *fhread_routine (void *arg)
 	// init executor
 	init_executor(TSRMLS_C);
 
-	// rewrite context based stuff
+	// link server context
 	SG(server_context) = FHREADS_SG(fhread->c_tsrm_ls, server_context);
 
+	/* save context based stuff */
 	zend_objects_store fhread_objects_store = EG(objects_store);
+	HashTable fhread_regular_list = EG(regular_list);
+	HashTable *fhread_function_table = EG(function_table);
+	HashTable *fhread_class_table = EG(class_table);
+	HashTable *fhread_zend_constants = EG(zend_constants);
+
+	// link functions
+	EG(function_table) = FHREADS_CG(fhread->c_tsrm_ls, function_table);
+	// link classes
+	EG(class_table) = FHREADS_CG(fhread->c_tsrm_ls, class_table);
+	// link constants
+	EG(zend_constants) = FHREADS_EG(fhread->c_tsrm_ls, zend_constants);
+	// link regular list
+	EG(regular_list) = FHREADS_EG(fhread->c_tsrm_ls, regular_list);
+	// link objects_store
 	EG(objects_store) = FHREADS_EG(fhread->c_tsrm_ls, objects_store);
 
-	/*
-	HashTable fhread_regular_list = EG(regular_list);
-	EG(regular_list) = FHREADS_EG(fhread->c_tsrm_ls, regular_list);
 
-	HashTable *fhread_function_table = EG(function_table);
-	EG(function_table) = FHREADS_CG(fhread->c_tsrm_ls, function_table);
-
-	HashTable *fhread_class_table = EG(class_table);
-	EG(class_table) = FHREADS_CG(fhread->c_tsrm_ls, class_table);
-
-	HashTable *fhread_zend_constants = EG(zend_constants);
-	EG(zend_constants) = FHREADS_EG(fhread->c_tsrm_ls, zend_constants);
-	*/
-
-	/*
-	// declair runnable zval
-	zval **runnable;
-	// get runnable from creator symbol table
-	zend_hash_find(&FHREADS_EG(fhread->c_tsrm_ls, symbol_table), fhread->gid, fhread->gid_len + 1, (void**)&runnable);
-
-	// inject fhread handlers for runnable zval
-	Z_OBJ_HT_PP(runnable) = &fhreads_handlers;
-
-	zend_function *fun;
-	zend_hash_find(&Z_OBJCE_PP(runnable)->function_table, "run", sizeof("run"), (void**)&fun);
-	*/
-
+	// init executor globals for function run to execute
 	EG(This) = (*fhread->runnable);
 	EG(active_op_array) = (zend_op_array*) fhread->run;
 	EG(scope) = Z_OBJCE_PP(fhread->runnable);
 	EG(called_scope) = EG(scope);
 	EG(in_execution) = 1;
 
-	// zend_mm_set_heap(fhread->mm_heap TSRMLS_CC);
-
 	// exec run method
 	zend_execute((zend_op_array*) fhread->run TSRMLS_CC);
 
-	//
-
-	// set internal mm heap back
-	//zend_mm_set_heap(old_heap TSRMLS_CC);
-
-	// call run method
-	// zend_call_method(fhread->runnable, Z_OBJCE_PP(fhread->runnable), NULL, ZEND_STRL("run"), NULL, 0, NULL, NULL TSRMLS_CC);
-	//zend_call_method(runnable, zend_get_class_entry(&(**runnable), fhread->c_tsrm_ls), NULL, ZEND_STRL("run"), NULL, 0, NULL, NULL, fhread->c_tsrm_ls);
-
 	// reset to thread context based stuff for shutdown properly
-
-	// zend_mm_set_heap(NULL TSRMLS_CC);
-
 	EG(objects_store) = fhread_objects_store;
-
-	/*
 	EG(regular_list) = fhread_regular_list;
-	EG(function_table) = fhread_function_table;
-	EG(class_table) = fhread_class_table;
 	EG(zend_constants) = fhread_zend_constants;
-	*/
+	EG(class_table) = fhread_class_table;
+	EG(function_table) = fhread_function_table;
 
 	// shutdown executor
 	shutdown_executor(TSRMLS_C);
 
-	// free interpreter context
-	tsrm_free_interpreter_context(TSRMLS_C);
-
-	// free fhread args
-	free(fhread);
+	// free interpreter context if wanted
+	// tsrm_free_interpreter_context(TSRMLS_C);
 
 	// exit thread
 	pthread_exit(NULL);
@@ -297,28 +173,35 @@ PHP_FUNCTION(fhread_create)
 	char *gid;
 	int gid_len;
 	int status;
+	FHREAD* fhread;
 
 	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &gid, &gid_len) == FAILURE) {
 		RETURN_NULL();
 	}
 
-	// prepare fhread args
-	FHREAD* fhread = malloc(sizeof(FHREAD));
-	fhread->c_tsrm_ls = TSRMLS_C;
-	// init interpreter context for thread routine
-	fhread->tsrm_ls = tsrm_new_interpreter_context();
-
-	// get runnable from creator symbol table
-	zend_hash_find(&EG(symbol_table), gid, gid_len + 1, (void**)&fhread->runnable);
-
-	// inject fhread handlers for runnable zval
-	Z_OBJ_HT_PP(fhread->runnable) = &fhreads_handlers;
-
-	zend_hash_find(&Z_OBJCE_PP(fhread->runnable)->function_table, "run", sizeof("run"), (void**)&fhread->run);
+	// check if fhread was alreade prepared for gid
+	if (zend_hash_find(&FHREADS_G(fhreads), gid, gid_len + 1, (void*)&fhread) != SUCCESS) {
+		// prepare fhread
+		fhread = malloc(sizeof(FHREAD));
+		fhread->executor_inited = 0;
+		// set creator tsrm ls
+		fhread->c_tsrm_ls = TSRMLS_C;
+		// create new tsrm ls for thread routine
+		fhread->tsrm_ls = tsrm_new_interpreter_context();
+		// get runnable zval from creator symbol table
+		zend_hash_find(&EG(symbol_table), gid, gid_len + 1, (void**)&fhread->runnable);
+		// get run function from function table
+		zend_hash_find(&Z_OBJCE_PP(fhread->runnable)->function_table, "run", sizeof("run"), (void**)&fhread->run);
+		// add to globals hash
+		zend_hash_add(&FHREADS_G(fhreads), gid, gid_len + 1, (void*)&fhread, sizeof(FHREAD), NULL);
+		printf("CREATE gid %s\n", gid);
+	}
 
 	// create thread
 	status = pthread_create(&fhread->thread_id, NULL, fhread_routine, fhread);
 
+
+	// return thread id
 	RETURN_LONG((long)fhread->thread_id);
 }
 
@@ -341,17 +224,6 @@ PHP_FUNCTION(fhread_join)
 	RETURN_LONG((long)status);
 }
 
-/* {{{ php_fhreads_init_globals
- */
-/* Uncomment this function if you have INI entries
-static void php_fhreads_init_globals(zend_fhreads_globals *fhreads_globals)
-{
-	fhreads_globals->global_value = 0;
-	fhreads_globals->global_string = NULL;
-}
-*/
-/* }}} */
-
 /* {{{ PHP_MINIT_FUNCTION
  */
 PHP_MINIT_FUNCTION(fhreads)
@@ -359,8 +231,6 @@ PHP_MINIT_FUNCTION(fhreads)
 	// Setup standard and fhreads object handlers
 	fhreads_zend_handlers = zend_get_std_object_handlers();
 	memcpy(&fhreads_handlers, fhreads_zend_handlers, sizeof(zend_object_handlers));
-
-	g_tsrm_ls = ts_resource_ex(0, NULL);
 
 	// override object handlers
 	fhreads_handlers.write_property = fhread_write_property;
@@ -378,6 +248,11 @@ PHP_MINIT_FUNCTION(fhreads)
 	/* If you have INI entries, uncomment these lines 
 	REGISTER_INI_ENTRIES();
 	*/
+
+	ZEND_INIT_MODULE_GLOBALS(fhreads, NULL, NULL);
+
+	zend_hash_init(&FHREADS_G(fhreads), 64, NULL, (dtor_func_t) fhreads_global_free, 1);
+
 	return SUCCESS;
 }
 /* }}} */
@@ -389,6 +264,9 @@ PHP_MSHUTDOWN_FUNCTION(fhreads)
 	/* uncomment this line if you have INI entries
 	UNREGISTER_INI_ENTRIES();
 	*/
+
+	zend_hash_destroy(&FHREADS_G(fhreads));
+
 	return SUCCESS;
 }
 /* }}} */

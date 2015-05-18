@@ -71,39 +71,18 @@ extern zend_module_entry fhreads_module_entry;
 #include "TSRM.h"
 #endif
 
-/* 
-  	Declare any global variables you may need between the BEGIN
-	and END macros here:     
-
 ZEND_BEGIN_MODULE_GLOBALS(fhreads)
-	long  global_value;
-	char *global_string;
+	HashTable fhreads;
 ZEND_END_MODULE_GLOBALS(fhreads)
-*/
 
-/* In every utility function you add that needs to use variables 
-   in php_fhreads_globals, call TSRMLS_FETCH(); after declaring other 
-   variables used by that function, or better yet, pass in TSRMLS_CC
-   after the last function argument and declare your utility function
-   with TSRMLS_DC after the last declared argument.  Always refer to
-   the globals in your function as FHREADS_G(variable).  You are 
-   encouraged to rename these macros something shorter, see
-   examples in any other php module directory.
-*/
-
-
-/* {{{ fhread args structure */
 typedef struct _fhread {
-	THREAD_T thread_id;
+	pthread_t thread_id;
 	void ***c_tsrm_ls;
 	TSRMLS_D;
-	char *gid;
-	int gid_len;
 	zend_function *run;
 	zval **runnable;
-	zend_mm_heap *mm_heap;
+	int executor_inited;
 } FHREAD;
-
 
 void fhread_write_property(zval *object, zval *member, zval *value, const zend_literal *key TSRMLS_DC);
 void fhread_init_executor(TSRMLS_D);
@@ -114,7 +93,6 @@ void fhread_ts_free_thread(THREAD_T thread_id);
 /* {{{ TSRM manipulation */
 #define FHREADS_FETCH_ALL(ls, id, type) ((type) (*((void ***) ls))[TSRM_UNSHUFFLE_RSRC_ID(id)])
 #define FHREADS_FETCH_CTX(ls, id, type, element) (((type) (*((void ***) ls))[TSRM_UNSHUFFLE_RSRC_ID(id)])->element)
-#define FHREADS_AG(ls, v) FHREADS_FETCH_CTX(ls, alloc_globals_id, zend_alloc_globals*, v)
 #define FHREADS_CG(ls, v) FHREADS_FETCH_CTX(ls, compiler_globals_id, zend_compiler_globals*, v)
 #define FHREADS_CG_ALL(ls) FHREADS_FETCH_ALL(ls, compiler_globals_id, zend_compiler_globals*)
 #define FHREADS_EG(ls, v) FHREADS_FETCH_CTX(ls, executor_globals_id, zend_executor_globals*, v)
@@ -129,6 +107,19 @@ void fhread_ts_free_thread(THREAD_T thread_id);
 #endif
 
 #endif	/* PHP_FHREADS_H */
+
+struct _zend_mm_heap {
+	int   use_zend_alloc;
+	void *(*_malloc)(size_t);
+	void  (*_free)(void *);
+	void *(*_realloc)(void *, size_t);
+	size_t              free_bitmap;
+	size_t              large_free_bitmap;
+	size_t              block_size;
+	size_t              compact_size;
+	zend_mm_segment    *segments_list;
+	zend_mm_storage    *storage;
+};
 
 
 /*

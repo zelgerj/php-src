@@ -398,6 +398,7 @@ void tsrm_free_interpreter_context(void *context)
 		}
 		free(thread_resources->storage);
 		free(thread_resources);
+
 		thread_resources = next;
 	}
 }
