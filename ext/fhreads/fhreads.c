@@ -31,10 +31,8 @@ ZEND_DECLARE_MODULE_GLOBALS(fhreads)
 
 /* True global resources - no need for thread safety here */
 static int le_fhreads;
-
-zend_object_handlers fhreads_handlers;
-zend_object_handlers *fhreads_zend_handlers;
-
+static zend_object_handlers fhreads_handlers;
+static zend_object_handlers *fhreads_zend_handlers;
 
 /* {{{ PHP_INI
  */
@@ -54,7 +52,9 @@ void fhread_write_property(zval *object, zval *member, zval *value, const zend_l
 
 /* {{{ */
 void fhreads_global_free(FHREAD *fhread) {
-   //free(&fhread);
+	// free own interpreter context
+	tsrm_free_interpreter_context(fhread->tsrm_ls);
+	efree(&fhread);
 } /* }}} */
 
 void *fhread_routine (void *arg)
@@ -90,17 +90,6 @@ void *fhread_routine (void *arg)
 		fhread->executor_inited = 1;
 	}
 
-
-	/* save context based stuff */
-	/*
-	zend_objects_store fhread_objects_store = EG(objects_store);
-	HashTable fhread_regular_list = EG(regular_list);
-	HashTable *fhread_function_table = EG(function_table);
-	HashTable *fhread_class_table = EG(class_table);
-	HashTable *fhread_zend_constants = EG(zend_constants);
-	 */
-
-
 	// init executor globals for function run to execute
 	EG(This) = (*fhread->runnable);
 	EG(active_op_array) = (zend_op_array*) fhread->run;
@@ -111,30 +100,12 @@ void *fhread_routine (void *arg)
 	// exec run method
 	zend_execute((zend_op_array*) fhread->run TSRMLS_CC);
 
+	// reset executor globals
 	EG(in_execution) = 0;
 	EG(exception) = NULL;
 	EG(prev_exception) = NULL;
-	EG(scope) = NULL;
-	EG(called_scope) = NULL;
-	EG(This) = NULL;
-	EG(active_op_array) = NULL;
 	EG(active) = 1;
 	EG(start_op) = NULL;
-
-	/*
-	// reset to thread context based stuff for shutdown properly
-	EG(objects_store) = fhread_objects_store;
-	EG(regular_list) = fhread_regular_list;
-	EG(zend_constants) = fhread_zend_constants;
-	EG(class_table) = fhread_class_table;
-	EG(function_table) = fhread_function_table;
-	 */
-
-	// shutdown executor
-	// shutdown_executor(TSRMLS_C);
-
-	// free interpreter context if wanted
-	// tsrm_free_interpreter_context(TSRMLS_C);
 
 	// exit thread
 	pthread_exit(NULL);
@@ -344,6 +315,7 @@ PHP_MINFO_FUNCTION(fhreads)
 {
 	php_info_print_table_start();
 	php_info_print_table_header(2, "fhreads support", "enabled");
+	php_info_print_table_row(2, "fhreads version", PHP_FHREADS_VERSION);
 	php_info_print_table_end();
 
 	/* Remove comments if you have entries in php.ini

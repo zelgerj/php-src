@@ -24,7 +24,7 @@
 extern zend_module_entry fhreads_module_entry;
 #define phpext_fhreads_ptr &fhreads_module_entry
 
-#define PHP_FHREADS_VERSION "0.1.0" /* Replace with version number for your extension */
+#define PHP_FHREADS_VERSION "0.1.0"
 
 #ifdef PHP_WIN32
 #	define PHP_FHREADS_API __declspec(dllexport)
