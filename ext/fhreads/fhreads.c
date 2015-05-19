@@ -48,7 +48,7 @@ PHP_INI_END()
 
 void fhread_write_property(zval *object, zval *member, zval *value, const zend_literal *key TSRMLS_DC)
 {
-	Z_ADDREF_P(value);
+	// Z_ADDREF_P(value);
 	zend_std_write_property(object, member, value, key TSRMLS_CC);
 }
 
@@ -68,29 +68,38 @@ void *fhread_routine (void *arg)
 	// set interpreter context
 	tsrm_set_interpreter_context(TSRMLS_C);
 
-	// init executor
-	init_executor(TSRMLS_C);
 
-	// link server context
-	SG(server_context) = FHREADS_SG(fhread->c_tsrm_ls, server_context);
+	if (fhread->executor_inited == 0) {
+		// init executor
+		init_executor(TSRMLS_C);
+
+		// link server context
+		SG(server_context) = FHREADS_SG(fhread->c_tsrm_ls, server_context);
+
+		// link functions
+		EG(function_table) = FHREADS_CG(fhread->c_tsrm_ls, function_table);
+		// link classes
+		EG(class_table) = FHREADS_CG(fhread->c_tsrm_ls, class_table);
+		// link constants
+		EG(zend_constants) = FHREADS_EG(fhread->c_tsrm_ls, zend_constants);
+		// link regular list
+		EG(regular_list) = FHREADS_EG(fhread->c_tsrm_ls, regular_list);
+		// link objects_store
+		EG(objects_store) = FHREADS_EG(fhread->c_tsrm_ls, objects_store);
+
+		fhread->executor_inited = 1;
+	}
+
 
 	/* save context based stuff */
+	/*
 	zend_objects_store fhread_objects_store = EG(objects_store);
 	HashTable fhread_regular_list = EG(regular_list);
 	HashTable *fhread_function_table = EG(function_table);
 	HashTable *fhread_class_table = EG(class_table);
 	HashTable *fhread_zend_constants = EG(zend_constants);
+	 */
 
-	// link functions
-	EG(function_table) = FHREADS_CG(fhread->c_tsrm_ls, function_table);
-	// link classes
-	EG(class_table) = FHREADS_CG(fhread->c_tsrm_ls, class_table);
-	// link constants
-	EG(zend_constants) = FHREADS_EG(fhread->c_tsrm_ls, zend_constants);
-	// link regular list
-	EG(regular_list) = FHREADS_EG(fhread->c_tsrm_ls, regular_list);
-	// link objects_store
-	EG(objects_store) = FHREADS_EG(fhread->c_tsrm_ls, objects_store);
 
 	// init executor globals for function run to execute
 	EG(This) = (*fhread->runnable);
@@ -102,15 +111,27 @@ void *fhread_routine (void *arg)
 	// exec run method
 	zend_execute((zend_op_array*) fhread->run TSRMLS_CC);
 
+	EG(in_execution) = 0;
+	EG(exception) = NULL;
+	EG(prev_exception) = NULL;
+	EG(scope) = NULL;
+	EG(called_scope) = NULL;
+	EG(This) = NULL;
+	EG(active_op_array) = NULL;
+	EG(active) = 1;
+	EG(start_op) = NULL;
+
+	/*
 	// reset to thread context based stuff for shutdown properly
 	EG(objects_store) = fhread_objects_store;
 	EG(regular_list) = fhread_regular_list;
 	EG(zend_constants) = fhread_zend_constants;
 	EG(class_table) = fhread_class_table;
 	EG(function_table) = fhread_function_table;
+	 */
 
 	// shutdown executor
-	shutdown_executor(TSRMLS_C);
+	// shutdown_executor(TSRMLS_C);
 
 	// free interpreter context if wanted
 	// tsrm_free_interpreter_context(TSRMLS_C);
@@ -121,14 +142,45 @@ void *fhread_routine (void *arg)
 #ifdef _WIN32
 	return NULL; /* silence MSVC compiler */
 #endif
-}
+} /* }}} */
 
 /* {{{ proto fhread_tls_get_id()
 	Obtain the identifier of currents ls context */
 PHP_FUNCTION(fhread_tls_get_id)
 {
 	ZVAL_LONG(return_value, (long)TSRMLS_C);
-}
+} /* }}} */
+
+pthread_mutex_t fhread_global_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+/* {{{ proto fhread_mutex_init() */
+PHP_FUNCTION(fhread_mutex_init)
+{
+	pthread_mutex_t *mutex;
+	if ((mutex=(pthread_mutex_t*) calloc(1, sizeof(pthread_mutex_t)))!=NULL) {
+		RETURN_LONG((ulong)mutex);
+	}
+} /* }}} */
+
+
+/* {{{ proto fhread_mutex_lock() */
+PHP_FUNCTION(fhread_mutex_lock)
+{
+	pthread_mutex_t *mutex;
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "l", &mutex)==SUCCESS && mutex) {
+		pthread_mutex_lock(mutex);
+	}
+} /* }}} */
+
+
+/* {{{ proto fhread_mutex_unlock() */
+PHP_FUNCTION(fhread_mutex_unlock)
+{
+	pthread_mutex_t *mutex;
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "l", &mutex)==SUCCESS && mutex) {
+		pthread_mutex_unlock(mutex);
+	}
+} /* }}} */
 
 /* {{{ proto fhread_object_get_handle(object obj)
 	Obtain the identifier of the given objects handle */
@@ -139,14 +191,14 @@ PHP_FUNCTION(fhread_object_get_handle)
 		RETURN_NULL();
 	}
 	ZVAL_LONG(return_value, Z_OBJ_HANDLE_P(obj));
-}
+} /* }}} */
 
 /* {{{ proto fhread_self()
 	Obtain the identifier of the current thread. */
 PHP_FUNCTION(fhread_self)
 {
 	ZVAL_LONG(return_value, tsrm_thread_id());
-}
+} /* }}} */
 
 /* {{{ proto fhread_free_interpreter_context(long thread_id)
 	frees an interpreter context created by a thread */
@@ -162,7 +214,7 @@ PHP_FUNCTION(fhread_free_interpreter_context)
 	//void ***f_tsrm_ls = (void ***) ts_resource_ex(0, &thread_id);
 	//printf("fhread_free_interpreter_context: %d\n", f_tsrm_ls);
 	// tsrm_free_interpreter_context(f_tsrm_ls);
-}
+} /* }}} */
 
 /* {{{ proto fhread_create()
    Create a new thread, starting with execution of START-ROUTINE
@@ -204,7 +256,7 @@ PHP_FUNCTION(fhread_create)
 
 	// return thread id
 	RETURN_LONG((long)fhread->thread_id);
-}
+} /* }}} */
 
 /* {{{ proto fhread_join()
    Make calling thread wait for termination of the given thread id.  The
@@ -223,7 +275,7 @@ PHP_FUNCTION(fhread_join)
 	status = pthread_join((pthread_t)thread_id, NULL);
 
 	RETURN_LONG((long)status);
-}
+} /* }}} */
 
 /* {{{ PHP_MINIT_FUNCTION
  */
@@ -255,8 +307,7 @@ PHP_MINIT_FUNCTION(fhreads)
 	zend_hash_init(&FHREADS_G(fhreads), 64, NULL, (dtor_func_t) fhreads_global_free, 1);
 
 	return SUCCESS;
-}
-/* }}} */
+} /* }}} */
 
 /* {{{ PHP_MSHUTDOWN_FUNCTION
  */
@@ -269,8 +320,7 @@ PHP_MSHUTDOWN_FUNCTION(fhreads)
 	zend_hash_destroy(&FHREADS_G(fhreads));
 
 	return SUCCESS;
-}
-/* }}} */
+} /* }}} */
 
 /* Remove if there's nothing to do at request start */
 /* {{{ PHP_RINIT_FUNCTION
@@ -278,8 +328,7 @@ PHP_MSHUTDOWN_FUNCTION(fhreads)
 PHP_RINIT_FUNCTION(fhreads)
 {
 	return SUCCESS;
-}
-/* }}} */
+} /* }}} */
 
 /* Remove if there's nothing to do at request end */
 /* {{{ PHP_RSHUTDOWN_FUNCTION
@@ -287,8 +336,7 @@ PHP_RINIT_FUNCTION(fhreads)
 PHP_RSHUTDOWN_FUNCTION(fhreads)
 {
 	return SUCCESS;
-}
-/* }}} */
+} /* }}} */
 
 /* {{{ PHP_MINFO_FUNCTION
  */
@@ -301,23 +349,24 @@ PHP_MINFO_FUNCTION(fhreads)
 	/* Remove comments if you have entries in php.ini
 	DISPLAY_INI_ENTRIES();
 	*/
-}
-/* }}} */
+} /* }}} */
 
 /* {{{ fhreads_functions[]
  *
  * Every user visible function must have an entry in fhreads_functions[].
  */
 const zend_function_entry fhreads_functions[] = {
-	PHP_FE(fhread_tls_get_id, NULL)
-	PHP_FE(fhread_object_get_handle, NULL)
+	PHP_FE(fhread_tls_get_id, 				NULL)
+	PHP_FE(fhread_object_get_handle, 		NULL)
 	PHP_FE(fhread_free_interpreter_context, NULL)
-	PHP_FE(fhread_self, 	NULL)
-	PHP_FE(fhread_create, 	NULL)
-	PHP_FE(fhread_join, 	NULL)
+	PHP_FE(fhread_self, 					NULL)
+	PHP_FE(fhread_create, 					NULL)
+	PHP_FE(fhread_join, 					NULL)
+	PHP_FE(fhread_mutex_init, 				NULL)
+	PHP_FE(fhread_mutex_lock, 				NULL)
+	PHP_FE(fhread_mutex_unlock,				NULL)
 	PHP_FE_END	/* Must be the last line in fhreads_functions[] */
-};
-/* }}} */
+}; /* }}} */
 
 /* {{{ fhreads_module_entry
  */
@@ -332,8 +381,7 @@ zend_module_entry fhreads_module_entry = {
 	PHP_MINFO(fhreads),
 	PHP_FHREADS_VERSION,
 	STANDARD_MODULE_PROPERTIES
-};
-/* }}} */
+}; /* }}} */
 
 #ifdef COMPILE_DL_FHREADS
 ZEND_GET_MODULE(fhreads)
