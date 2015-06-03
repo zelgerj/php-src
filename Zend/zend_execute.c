@@ -219,8 +219,6 @@ static zend_never_inline zval **_get_zval_cv_lookup_BP_VAR_R(zval ***ptr, zend_u
 {
 	zend_compiled_variable *cv = &CV_DEF_OF(var);
 
-	printf("active_symbol_table\n");
-
 	if (!EG(active_symbol_table) ||
 	    zend_hash_quick_find(EG(active_symbol_table), cv->name, cv->name_len+1, cv->hash_value, (void **)ptr)==FAILURE) {
 		zend_error(E_NOTICE, "Undefined variable: %s", cv->name);

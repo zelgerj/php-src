@@ -50,7 +50,14 @@ abstract class Thread implements Runnable
      * 
      * @var int
      */
-    protected $threadId = null;
+    protected $id = null;
+    
+    /**
+     * Holds thread mutex pointer
+     * 
+     * @var int
+     */
+    protected $mutex = null;
     
     /**
      * Abstract run function
@@ -60,48 +67,84 @@ abstract class Thread implements Runnable
     abstract function run();
     
     /**
-     * Internal function to get globals identifier string
-     * 
-     * @return string
-     */
-    public function getGlobalsIdentifier()
-    {
-        return get_class($this) . "#" . fhread_object_get_handle($this);
-    }
-    
-    /**
      * Start method which will prepare, create and starts a thread
      * 
-     * @return void
+     * @return int pthread create status
      */
     public function start()
     {
-        // set ref to globals for thread to use it from
-        $GLOBALS[$this->getGlobalsIdentifier()] = $this;
-
+        // init thread mutex
+        $this->mutex = fhread_mutex_init();
         // create, start thread and save thread id 
-        $this->threadId = fhread_create($this->getGlobalsIdentifier());
+        $status = fhread_create($this, $this->id);
     }
     
     /**
-     * Returns the thread id
+     * Joins the current thread by its thread id.
+     *
+     * @return void
+     */
+    public function join()
+    {
+        // join if thread id is not null
+        if (!is_null($this->getThreadId())) {
+            fhread_join($this->getThreadId());
+        }
+    }
+    
+    /**
+     * Locks thread object's mutex
+     * 
+     * @return void
+     */
+    public function lock()
+    {
+        if (!is_null($this->getMutex())) {
+            fhread_mutex_lock($this->getMutex());
+        }
+    }
+    
+    /**
+     * Unlocks thread object's mutex
+     * 
+     * @return void
+     */
+    public function unlock()
+    {
+        if (!is_null($this->getMutex())) {
+            fhread_mutex_unlock($this->getMutex());
+        }
+    }
+    
+    /**
+     * 
+     * @param callable $sync
+     */
+    public function synchronized(\Closure $sync)
+    {
+        $this->lock();
+        $sync($this);
+        $this->unlock();
+    }
+    
+    /**
+     * Returns the thread mutex
+     * 
+     * @return int
+     */
+    public function getMutex()
+    {
+        return $this->mutex;
+    }
+    
+    /**
+     * Returns the threads id
      * 
      * @return int
      */
     public function getThreadId()
     {
-        return $this->threadId;
+        return $this->id;
     }
     
-    /**
-     * Joins the current thread by its thread id.
-     * 
-     * @return void
-     */
-    public function join()
-    {
-        if ($this->getThreadId()) {
-            fhread_join($this->getThreadId());
-        }
-    }
 }

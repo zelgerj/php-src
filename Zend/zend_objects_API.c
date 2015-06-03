@@ -117,7 +117,11 @@ ZEND_API zend_object_handle zend_objects_store_put(void *object, zend_objects_st
 			EG(objects_store).size <<= 1;
 			EG(objects_store).object_buckets = (zend_object_store_bucket *) erealloc(EG(objects_store).object_buckets, EG(objects_store).size * sizeof(zend_object_store_bucket));
 		}
-		handle = EG(objects_store).top++;
+
+		do {
+			handle = EG(objects_store).top++;
+		} while (EG(objects_store).object_buckets[handle].valid == 1);
+
 	}
 	obj = &EG(objects_store).object_buckets[handle].bucket.obj;
 	EG(objects_store).object_buckets[handle].destructor_called = 0;

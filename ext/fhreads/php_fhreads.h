@@ -24,7 +24,7 @@
 extern zend_module_entry fhreads_module_entry;
 #define phpext_fhreads_ptr &fhreads_module_entry
 
-#define PHP_FHREADS_VERSION "0.1.0"
+#define PHP_FHREADS_VERSION "0.1.1"
 
 #ifdef PHP_WIN32
 #	define PHP_FHREADS_API __declspec(dllexport)
@@ -77,6 +77,7 @@ ZEND_END_MODULE_GLOBALS(fhreads)
 
 typedef struct _fhread {
 	pthread_t thread_id;
+	pthread_mutex_t mutex;
 	void ***c_tsrm_ls;
 	TSRMLS_D;
 	zend_function *run;
@@ -84,11 +85,7 @@ typedef struct _fhread {
 	int executor_inited;
 } FHREAD;
 
-void fhread_write_property(zval *object, zval *member, zval *value, const zend_literal *key TSRMLS_DC);
-void fhread_init_executor(TSRMLS_D);
-
-/* frees all resources allocated for the current thread */
-void fhread_ts_free_thread(THREAD_T thread_id);
+void fhread_init_executor(FHREAD *fhread TSRMLS_DC);
 
 /* {{{ TSRM manipulation */
 #define FHREADS_FETCH_ALL(ls, id, type) ((type) (*((void ***) ls))[TSRM_UNSHUFFLE_RSRC_ID(id)])
