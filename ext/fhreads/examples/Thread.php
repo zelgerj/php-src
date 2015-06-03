@@ -69,7 +69,7 @@ abstract class Thread implements Runnable
     /**
      * Start method which will prepare, create and starts a thread
      * 
-     * @return int pthread create status
+     * @return boolean pthread create state
      */
     public function start()
     {
@@ -77,6 +77,8 @@ abstract class Thread implements Runnable
         $this->mutex = fhread_mutex_init();
         // create, start thread and save thread id 
         $status = fhread_create($this, $this->id);
+        if ($status === 0) return true;
+        return false;
     }
     
     /**
@@ -138,13 +140,31 @@ abstract class Thread implements Runnable
     }
     
     /**
-     * Returns the threads id
+     * Returns the objects threads id
      * 
      * @return int
      */
     public function getThreadId()
     {
         return $this->id;
+    }
+    
+    /**
+     * Returns current thread id
+     */
+    static public function getCurrentThreadId()
+    {
+        return fhread_self();
+    }
+    
+    /**
+     * Destructs the object after the threads run method has been executed
+     * 
+     * @return void
+     */
+    public function __destruct()
+    {
+        $this->join();
     }
     
 }

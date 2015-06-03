@@ -117,6 +117,9 @@ void fhread_write_property(zval *object, zval *member, zval *value, const zend_l
 
 /* {{{ */
 void fhreads_global_free(FHREAD *fhread) {
+
+	printf("asdfasdf\n");
+
 	// efree(&fhread);
 } /* }}} */
 
@@ -358,7 +361,7 @@ PHP_FUNCTION(fhread_create)
 	// check if fhread was alreade prepared for gid
 	if (zend_hash_find(&fhreads_objects, gid, strlen(gid) + 1, (void **)&fhread)  == FAILURE) {
 		// prepare fhread
-		fhread = (FHREAD *)malloc(sizeof(FHREAD));
+		fhread = (FHREAD *)emalloc(sizeof(FHREAD));
 		// init executor flag
 		fhread->executor_inited = 0;
 		// set creator tsrm ls
@@ -463,6 +466,7 @@ PHP_MSHUTDOWN_FUNCTION(fhreads)
 	*/
 
 	zend_hash_destroy(&FHREADS_G(fhreads));
+	zend_hash_destroy(&fhreads_objects);
 
 	return SUCCESS;
 } /* }}} */

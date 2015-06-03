@@ -9,17 +9,17 @@ if (!class_exists('\Thread')) {
 class CounterThread extends Thread
 {
     public $data = null;
-    
+
     /**
      * Constructor which refs the shared data object to this
-     * 
+     *
      * @param object $data
      */
     public function __construct($data)
     {
         $this->data = $data;
     }
-    
+
     public function run()
     {
         // wait randomized time
@@ -32,6 +32,17 @@ class CounterThread extends Thread
         $this->data->objects[$this->getThreadId()] = new stdClass();
         // unlock data object
         fhread_mutex_unlock($this->data->mutex);
+
+        while(1) {
+          $this->a = array();
+          $i = 0;
+          while (++$i < 10) {
+            $this->a[$i] = new stdClass();
+            unset($this->a[$i]);
+          }
+          usleep(100000);
+          echo $this->getThreadId() . " generated 10 classes" . PHP_EOL;
+        }
     }
 }
 
@@ -70,6 +81,12 @@ echo "$tMax threads finished..." . PHP_EOL;
 // dump shared data object
 var_dump($data);
 
+$a = array();
+$i = 0;
+while ($i < 100) {
+  $a[++$i] = new stdClass();
+}
+var_dump($a);
+
 // echo status
 echo PHP_EOL . "finished script!" . PHP_EOL;
-

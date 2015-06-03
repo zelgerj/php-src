@@ -15,6 +15,7 @@ class DummyThread extends Thread
         $this->synchronized(function($self) {
             echo 'In Synchronized Thread Context.' . PHP_EOL;
             $self->a = new stdClass();
+            $self->b = new stdClass();
             sleep(1);
         });
         usleep(100);
@@ -24,16 +25,12 @@ class DummyThread extends Thread
     }
 }
 
-
 $objs1 = new stdClass();
 $objs1 = new stdClass();
 $objs1 = new stdClass();
-
 $t = new DummyThread();
 
 $t->start();
-
-
 
 usleep(1000);
 $t->synchronized(function($self) use($objs1) {
