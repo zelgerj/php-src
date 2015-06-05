@@ -25424,6 +25424,7 @@ static int ZEND_FASTCALL  ZEND_ASSIGN_OBJ_SPEC_UNUSED_CONST_HANDLER(ZEND_OPCODE_
 	if (IS_UNUSED == IS_VAR && UNEXPECTED(object_ptr == NULL)) {
 		zend_error_noreturn(E_ERROR, "Cannot use string offset as an array");
 	}
+
 	zend_assign_to_object(RETURN_VALUE_USED(opline)?&EX_T(opline->result.var).var.ptr:NULL, object_ptr, property_name, (opline+1)->op1_type, &(opline+1)->op1, execute_data, ZEND_ASSIGN_OBJ, ((IS_CONST == IS_CONST) ? opline->op2.literal : NULL) TSRMLS_CC);
 	if (0) {
 		zval_ptr_dtor(&property_name);

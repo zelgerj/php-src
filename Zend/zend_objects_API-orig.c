@@ -27,19 +27,13 @@
 
 #define ZEND_DEBUG_OBJECTS 0
 
-zend_uint zend_global_top = 1, zend_global_size = 0, zend_global_free_list_head = -1;
-
 ZEND_API void zend_objects_store_init(zend_objects_store *objects, zend_uint init_size)
 {
-	zend_global_size = init_size;
 	objects->object_buckets = (zend_object_store_bucket *) emalloc(init_size * sizeof(zend_object_store_bucket));
-	objects->top = &zend_global_top; /* Skip 0 so that handles are true */
-	objects->size = &zend_global_size;
-	objects->free_list_head = &zend_global_free_list_head;
-	objects->mutex = (pthread_mutex_t *) emalloc(sizeof(pthread_mutex_t));
+	objects->top = 1; /* Skip 0 so that handles are true */
+	objects->size = init_size;
+	objects->free_list_head = -1;
 	memset(&objects->object_buckets[0], 0, sizeof(zend_object_store_bucket));
-
-	pthread_mutex_init(objects->mutex, NULL);
 }
 
 ZEND_API void zend_objects_store_destroy(zend_objects_store *objects)
@@ -52,7 +46,7 @@ ZEND_API void zend_objects_store_call_destructors(zend_objects_store *objects TS
 {
 	zend_uint i = 1;
 
-	for (i = 1; i < *objects->top ; i++) {
+	for (i = 1; i < objects->top ; i++) {
 		if (objects->object_buckets[i].valid) {
 			struct _store_object *obj = &objects->object_buckets[i].bucket.obj;
 
@@ -81,7 +75,7 @@ ZEND_API void zend_objects_store_mark_destructed(zend_objects_store *objects TSR
 	if (!objects->object_buckets) {
 		return;
 	}
-	for (i = 1; i < *objects->top ; i++) {
+	for (i = 1; i < objects->top ; i++) {
 		if (objects->object_buckets[i].valid) {
 			objects->object_buckets[i].destructor_called = 1;
 		}
@@ -92,7 +86,7 @@ ZEND_API void zend_objects_store_free_object_storage(zend_objects_store *objects
 {
 	zend_uint i = 1;
 
-	for (i = 1; i < *objects->top ; i++) {
+	for (i = 1; i < objects->top ; i++) {
 		if (objects->object_buckets[i].valid) {
 			struct _store_object *obj = &objects->object_buckets[i].bucket.obj;
 
@@ -115,22 +109,20 @@ ZEND_API zend_object_handle zend_objects_store_put(void *object, zend_objects_st
 	zend_object_handle handle;
 	struct _store_object *obj;
 
-	pthread_mutex_lock(EG(objects_store).mutex);
-
-	if (*EG(objects_store).free_list_head != -1) {
-		handle = *EG(objects_store).free_list_head;
-		*EG(objects_store).free_list_head = EG(objects_store).object_buckets[handle].bucket.free_list.next;
-
+	if (EG(objects_store).free_list_head != -1) {
+		handle = EG(objects_store).free_list_head;
+		EG(objects_store).free_list_head = EG(objects_store).object_buckets[handle].bucket.free_list.next;
 	} else {
-		if (*EG(objects_store).top == *EG(objects_store).size) {
-			*EG(objects_store).size <<= 1;
-			EG(objects_store).object_buckets = (zend_object_store_bucket *) erealloc(EG(objects_store).object_buckets, *EG(objects_store).size * sizeof(zend_object_store_bucket));
+		if (EG(objects_store).top == EG(objects_store).size) {
+			EG(objects_store).size <<= 1;
+			EG(objects_store).object_buckets = (zend_object_store_bucket *) erealloc(EG(objects_store).object_buckets, EG(objects_store).size * sizeof(zend_object_store_bucket));
 		}
-		handle = ++*EG(objects_store).top;
+
+		do {
+			handle = EG(objects_store).top++;
+		} while (EG(objects_store).object_buckets[handle].valid == 1);
+
 	}
-
-	pthread_mutex_unlock(EG(objects_store).mutex);
-
 	obj = &EG(objects_store).object_buckets[handle].bucket.obj;
 	EG(objects_store).object_buckets[handle].destructor_called = 0;
 	EG(objects_store).object_buckets[handle].valid = 1;
@@ -147,11 +139,6 @@ ZEND_API zend_object_handle zend_objects_store_put(void *object, zend_objects_st
 #if ZEND_DEBUG_OBJECTS
 	fprintf(stderr, "Allocated object id #%d\n", handle);
 #endif
-
-
-
-	// ZEND_OBJECTS_STORE_SYNC_END();
-
 	return handle;
 }
 
@@ -181,8 +168,8 @@ ZEND_API void zend_objects_store_add_ref_by_handle(zend_object_handle handle TSR
 }
 
 #define ZEND_OBJECTS_STORE_ADD_TO_FREE_LIST()																	\
-			EG(objects_store).object_buckets[handle].bucket.free_list.next = *EG(objects_store).free_list_head;	\
-			*EG(objects_store).free_list_head = handle;															\
+			EG(objects_store).object_buckets[handle].bucket.free_list.next = EG(objects_store).free_list_head;	\
+			EG(objects_store).free_list_head = handle;															\
 			EG(objects_store).object_buckets[handle].valid = 0;
 
 ZEND_API void zend_objects_store_del_ref(zval *zobject TSRMLS_DC)
@@ -218,7 +205,6 @@ ZEND_API void zend_objects_store_del_ref_by_handle_ex(zend_object_handle handle,
 	 */
 	if (EG(objects_store).object_buckets[handle].valid) {
 		if (obj->refcount == 1) {
-
 			if (!EG(objects_store).object_buckets[handle].destructor_called) {
 				EG(objects_store).object_buckets[handle].destructor_called = 1;
 
@@ -233,13 +219,12 @@ ZEND_API void zend_objects_store_del_ref_by_handle_ex(zend_object_handle handle,
 					} zend_end_try();
 				}
 			}
-
+			
 			/* re-read the object from the object store as the store might have been reallocated in the dtor */
 			obj = &EG(objects_store).object_buckets[handle].bucket.obj;
 
 			if (obj->refcount == 1) {
 				GC_REMOVE_ZOBJ_FROM_BUFFER(obj);
-
 				if (obj->free_storage) {
 					zend_try {
 						obj->free_storage(obj->object TSRMLS_CC);
@@ -247,9 +232,7 @@ ZEND_API void zend_objects_store_del_ref_by_handle_ex(zend_object_handle handle,
 						failure = 1;
 					} zend_end_try();
 				}
-				pthread_mutex_lock(EG(objects_store).mutex);
 				ZEND_OBJECTS_STORE_ADD_TO_FREE_LIST();
-				pthread_mutex_unlock(EG(objects_store).mutex);
 			}
 		}
 	}

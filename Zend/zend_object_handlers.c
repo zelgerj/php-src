@@ -543,6 +543,7 @@ zval *zend_std_read_property(zval *object, zval *member, int type, const zend_li
 			retval = &EG(uninitialized_zval_ptr);
 		}
 	}
+
 	if (UNEXPECTED(tmp_member != NULL)) {
 		Z_ADDREF_PP(retval);
 		zval_ptr_dtor(&tmp_member);

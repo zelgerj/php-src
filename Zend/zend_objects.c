@@ -128,8 +128,10 @@ ZEND_API void zend_objects_destroy_object(zend_object *object, zend_object_handl
 				EG(exception) = old_exception;
 			}
 		}
+
 		zval_ptr_dtor(&obj);
 	}
+
 }
 
 ZEND_API void zend_objects_free_object_storage(zend_object *object TSRMLS_DC)

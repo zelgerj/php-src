@@ -50,9 +50,10 @@ typedef struct _zend_object_store_bucket {
 
 typedef struct _zend_objects_store {
 	zend_object_store_bucket *object_buckets;
-	zend_uint top;
-	zend_uint size;
-	int free_list_head;
+	zend_uint *top;
+	zend_uint *size;
+	int *free_list_head;
+	pthread_mutex_t *mutex;
 } zend_objects_store;
 
 /* Global store handling functions */

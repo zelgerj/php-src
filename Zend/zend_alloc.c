@@ -1901,6 +1901,7 @@ static void *_zend_mm_alloc_int(zend_mm_heap *heap, size_t size ZEND_FILE_LINE_D
 		}
 #if ZEND_MM_CACHE
 		if (EXPECTED(heap->cache[index] != NULL)) {
+
 			/* Get block from cache */
 #if ZEND_MM_CACHE_STAT
 			heap->cache_stat[index].count--;
@@ -1912,6 +1913,7 @@ static void *_zend_mm_alloc_int(zend_mm_heap *heap, size_t size ZEND_FILE_LINE_D
 			ZEND_MM_CHECK_MAGIC(best_fit, MEM_BLOCK_CACHED);
 			ZEND_MM_SET_DEBUG_INFO(best_fit, size, 1, 0);
 			HANDLE_UNBLOCK_INTERRUPTIONS();
+
 			return ZEND_MM_DATA_OF(best_fit);
  		}
 #if ZEND_MM_CACHE_STAT
@@ -1993,6 +1995,7 @@ out_of_memory:
 #else
 			zend_mm_safe_error(heap, "Out of memory (allocated %ld) (tried to allocate %lu bytes)", heap->real_size, size);
 #endif
+
 			return NULL;
 		}
 
