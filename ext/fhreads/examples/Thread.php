@@ -18,7 +18,7 @@
 
 /**
  * Interface Runnable
- * 
+ *
  * Simple interface for runnables
  *
  * @author    Johann Zelger <jz@appserver.io>
@@ -47,40 +47,40 @@ abstract class Thread implements Runnable
 {
     /**
      * Holds thread id if started
-     * 
+     *
      * @var int
      */
     protected $id = null;
-    
+
     /**
      * Holds thread mutex pointer
-     * 
+     *
      * @var int
      */
     protected $mutex = null;
-    
+
     /**
      * Abstract run function
-     * 
+     *
      * @return void
      */
     abstract function run();
-    
+
     /**
      * Start method which will prepare, create and starts a thread
-     * 
+     *
      * @return boolean pthread create state
      */
     public function start()
     {
         // init thread mutex
         $this->mutex = fhread_mutex_init();
-        // create, start thread and save thread id 
+        // create, start thread and save thread id
         $status = fhread_create($this, $this->id);
         if ($status === 0) return true;
         return false;
     }
-    
+
     /**
      * Joins the current thread by its thread id.
      *
@@ -94,10 +94,10 @@ abstract class Thread implements Runnable
             fhread_join($this->getThreadId());
         }
     }
-    
+
     /**
      * Locks thread object's mutex
-     * 
+     *
      * @return void
      */
     public function lock()
@@ -106,10 +106,10 @@ abstract class Thread implements Runnable
             fhread_mutex_lock($this->getMutex());
         }
     }
-    
+
     /**
      * Unlocks thread object's mutex
-     * 
+     *
      * @return void
      */
     public function unlock()
@@ -118,9 +118,9 @@ abstract class Thread implements Runnable
             fhread_mutex_unlock($this->getMutex());
         }
     }
-    
+
     /**
-     * 
+     *
      * @param callable $sync
      */
     public function synchronized(\Closure $sync)
@@ -129,27 +129,27 @@ abstract class Thread implements Runnable
         $sync($this);
         $this->unlock();
     }
-    
+
     /**
      * Returns the thread mutex
-     * 
+     *
      * @return int
      */
     public function getMutex()
     {
         return $this->mutex;
     }
-    
+
     /**
      * Returns the objects threads id
-     * 
+     *
      * @return int
      */
     public function getThreadId()
     {
         return $this->id;
     }
-    
+
     /**
      * Returns current thread id
      */
@@ -157,15 +157,15 @@ abstract class Thread implements Runnable
     {
         return fhread_self();
     }
-    
+
     /**
      * Destructs the object after the threads run method has been executed
-     * 
+     *
      * @return void
      */
     public function __destruct()
     {
         $this->join();
     }
-    
+
 }

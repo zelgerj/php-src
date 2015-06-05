@@ -27,6 +27,8 @@
 
 #define ZEND_DEBUG_OBJECTS 0
 
+#define ZEND_MAIN_OBJECT_STORAGE_BEFORE_PUT;
+
 zend_uint zend_global_top = 1, zend_global_size = 0, zend_global_free_list_head = -1;
 
 ZEND_API void zend_objects_store_init(zend_objects_store *objects, zend_uint init_size)
