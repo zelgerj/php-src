@@ -29,20 +29,12 @@
 
 ZEND_DECLARE_MODULE_GLOBALS(fhreads)
 
-#if PHP_VERSION_ID >= 50500
-void (*zend_execute_old)(zend_execute_data *execute_data TSRMLS_DC);
-#else
-void (*zend_execute_old)(zend_op_array *op_array TSRMLS_DC);
-#endif
-
 /* True global resources - no need for thread safety here */
 static void ***fhread_global_tsrm_ls;
 static zend_object_handlers fhreads_handlers;
 static zend_object_handlers *fhreads_zend_handlers;
 static HashTable fhreads_objects;
 static pthread_mutex_t fhread_global_mutex = PTHREAD_MUTEX_INITIALIZER;
-static pthread_mutex_t fhread_ex_mutex = PTHREAD_MUTEX_INITIALIZER;
-static pthread_mutex_t fhread_write_property_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 /* {{{ PHP_INI
  */
@@ -54,88 +46,6 @@ PHP_INI_END()
 */
 /* }}} */
 
-/*
-ZEND_API union _zend_function *fhreads_get_constructor(zval *object TSRMLS_DC) /* {{{
-{
-	// fhreaded objects to sync
-	FHREAD *fhread;
-	zend_mm_heap *old_mm_heap, *mm_heap;
-
-	// synchronize context fhread objects_store top
-	for (zend_hash_internal_pointer_reset(&fhreads_objects);
-		 zend_hash_get_current_data(&fhreads_objects, (void **) &fhread) == SUCCESS;
-		 zend_hash_move_forward(&fhreads_objects)
-	) {
-		// sync top of objects store
-		FHREADS_EG(fhread->tsrm_ls, objects_store).top = EG(objects_store).top;
-	}
-
-	// check if reallocation will be done next time
-	if (EG(objects_store).top + 1 == EG(objects_store).size) {
-		// enhance size
-		EG(objects_store).size <<= 1;
-
-		printf("resize objects_store to: %d\n", EG(objects_store).size);
-		printf("top: %d\n", EG(objects_store).top);
-
-		// set heap to be in global context scope
-		mm_heap = zend_mm_set_heap(NULL, fhread_global_tsrm_ls);
-		zend_mm_set_heap(mm_heap, fhread_global_tsrm_ls);
-		old_mm_heap = zend_mm_set_heap(mm_heap TSRMLS_CC);
-
-		// realloc new objects_bucket
-		EG(objects_store).object_buckets = (zend_object_store_bucket *) erealloc(EG(objects_store).object_buckets, EG(objects_store).size * sizeof(zend_object_store_bucket));
-
-		// reset heap to be back in current scope
-		zend_mm_set_heap(old_mm_heap TSRMLS_CC);
-
-		// sync all fhread objects_stores
-		for (zend_hash_internal_pointer_reset(&fhreads_objects);
-			 zend_hash_get_current_data(&fhreads_objects, (void **) &fhread) == SUCCESS;
-			 zend_hash_move_forward(&fhreads_objects)
-		) {
-			// do not sync for current scope
-			if (TSRMLS_C != fhread->tsrm_ls) {
-				FHREADS_EG(fhread->tsrm_ls, objects_store).size = EG(objects_store).size;
-				FHREADS_EG(fhread->tsrm_ls, objects_store).object_buckets = EG(objects_store).object_buckets;
-			}
-		}
-	}
-
-	union _zend_function* ctor = zend_std_get_constructor(object TSRMLS_CC);
-
-	// unlock global mutex for object allocation to be synchonized
-	pthread_mutex_unlock(&fhread_global_mutex);
-	return ctor;
-}
-
-void fhread_write_property(zval *object, zval *member, zval *value, const zend_literal *key TSRMLS_DC)
-{
-	zend_std_write_property(object, member, value, key TSRMLS_CC);
-}
-/* }}} */
-
-void fhreads_sync_objects_store_buckets()
-{
-
-	printf("\n\n\n\n\n\n\n\n\n\n\nfhreads_sync_objects_store_buckets\n\n\n\n\n\n\n\n\n\n");
-
-	TSRMLS_FETCH();
-	FHREAD *fhread;
-
-	// sync all fhread objects_stores
-	for (zend_hash_internal_pointer_reset(&fhreads_objects);
-		 zend_hash_get_current_data(&fhreads_objects, (void **) &fhread) == SUCCESS;
-		 zend_hash_move_forward(&fhreads_objects)
-	) {
-		// do not sync for current scope
-		if (TSRMLS_C != fhread->tsrm_ls) {
-			FHREADS_EG(fhread->tsrm_ls, objects_store).size = EG(objects_store).size;
-			FHREADS_EG(fhread->tsrm_ls, objects_store).object_buckets = EG(objects_store).object_buckets;
-		}
-	}
-}
-
 
 /* {{{ */
 void fhreads_global_free(FHREAD *fhread)
@@ -144,76 +54,40 @@ void fhreads_global_free(FHREAD *fhread)
 	// efree(&fhread);
 } /* }}} */
 
-static int fhread_opz_declare_lamda_function(ZEND_OPCODE_HANDLER_ARGS)
-{
-	return ZEND_USER_OPCODE_DISPATCH;
-}
-
-/* {{{ */
-static int fhread_opz_synched(ZEND_OPCODE_HANDLER_ARGS)
-{
-	printf("%d | fhread_opz_unlock\n", execute_data->opline->opcode);
-	pthread_mutex_unlock(&fhread_ex_mutex);
-	printf("%d | fhread_opz_lock\n", execute_data->opline->opcode);
-	// lock global mutex for object allocation to be synchonized
-	pthread_mutex_lock(&fhread_ex_mutex);
-	// go on
-	return ZEND_USER_OPCODE_DISPATCH;
-} /* }}} */
-
-/* {{{ */
-static int fhread_opz_nonsynched(ZEND_OPCODE_HANDLER_ARGS)
-{
-	printf("%d | fhread_opz_unlock\n", execute_data->opline->opcode);
-	// lock global mutex for object allocation to be synchonized
-	pthread_mutex_unlock(&fhread_ex_mutex);
-	// go on
-	return ZEND_USER_OPCODE_DISPATCH;
-} /* }}} */
-
-/* {{{
-ZEND_API void fhreads_objects_store_del_ref(zval *zobject TSRMLS_DC)
-{
-	// printf("fhreads_objects_store_del_ref\n");
-	zend_objects_store_del_ref(zobject TSRMLS_CC);
-}
-/* }}} */
-
-/* {{{
-ZEND_API zend_object_value fhreads_objects_store_clone_obj(zval *zobject TSRMLS_DC)
-{
-	// printf("fhreads_objects_store_clone_obj\n");
-	return zend_objects_store_clone_obj(zobject TSRMLS_CC);
-}
-/* }}} */
-
 /* {{{ Initialises the executor in fhreads context */
-void fhread_init_executor(FHREAD *fhread TSRMLS_DC) /* {{{ */
+void fhread_init_executor(FHREAD *fhread) /* {{{ */
 {
 	// check if executor was not inited before
 	if (fhread->executor_inited == 0) {
 
 		pthread_mutex_lock(&fhread_global_mutex);
 
-		zend_init_fpu(TSRMLS_C);
+		zend_init_fpu();
 
- 		INIT_ZVAL(EG(uninitialized_zval));
-		/* trick to make uninitialized_zval never be modified, passed by ref, etc. */
-		Z_ADDREF(EG(uninitialized_zval));
-		INIT_ZVAL(EG(error_zval));
+		ZVAL_NULL(&EG(uninitialized_zval));
+		ZVAL_NULL(&EG(error_zval));
 
+		/*
 		EG(uninitialized_zval_ptr)=&EG(uninitialized_zval);
 		EG(error_zval_ptr)=&EG(error_zval);
+		*/
 /* destroys stack frame, therefore makes core dumps worthless */
 #if 0&&ZEND_DEBUG
 	original_sigsegv_handler = signal(SIGSEGV, zend_handle_sigsegv);
 #endif
 
+		/*
 		EG(return_value_ptr_ptr) = NULL;
+		*/
+
 		EG(symtable_cache_ptr) = EG(symtable_cache) - 1;
 		EG(symtable_cache_limit) = EG(symtable_cache) + SYMTABLE_CACHE_SIZE - 1;
 		EG(no_extensions) = 0;
+
+		/*
 		EG(in_execution) = 0;
+		*/
+
 		EG(in_autoload) = NULL;
 		EG(autoload_func) = NULL;
 		EG(error_handling) = EH_NORMAL;
@@ -229,13 +103,12 @@ void fhread_init_executor(FHREAD *fhread TSRMLS_DC) /* {{{ */
 		// link objects_store
 		EG(objects_store) = FHREADS_EG(fhread->c_tsrm_ls, objects_store);
 
-		zend_vm_stack_init(TSRMLS_C);
-		zend_vm_stack_push((void *) NULL TSRMLS_CC);
+		zend_vm_stack_init();
 
 		pthread_mutex_unlock(&fhread_global_mutex);
 
 		EG(ticks_count) = 0;
-		EG(user_error_handler) = NULL;
+		ZVAL_UNDEF(&EG(user_error_handler));
 		EG(current_execute_data) = NULL;
 
 		EG(full_tables_cleanup) = 0;
@@ -246,22 +119,33 @@ void fhread_init_executor(FHREAD *fhread TSRMLS_DC) /* {{{ */
 		EG(exception) = NULL;
 		EG(prev_exception) = NULL;
 		EG(scope) = NULL;
+
+		/*
 		EG(called_scope) = NULL;
 		EG(This) = NULL;
 		EG(active_op_array) = NULL;
+		*/
+
 		EG(active) = 1;
+
+		/*
 		EG(start_op) = NULL;
+		*/
 
 		// set executor inited flag
 		fhread->executor_inited = 1;
 	}
 
 	// init executor globals for function run to execute
+	/*
 	EG(This) = (*fhread->runnable);
 	EG(active_op_array) = (zend_op_array*) fhread->run;
-	EG(scope) = Z_OBJCE_PP(fhread->runnable);
+	*/
+	EG(scope) = Z_OBJCE_P(*fhread->runnable);
+	/*
 	EG(called_scope) = EG(scope);
 	EG(in_execution) = 1;
+	*/
 }
 /* }}} */
 
@@ -271,17 +155,20 @@ void *fhread_routine (void *arg)
 	// passed the object as argument
 	FHREAD* fhread = (FHREAD *) arg;
 	// init threadsafe manager local storage and create new context
-	TSRMLS_D = fhread->tsrm_ls;
+	void ***tsrm_ls = fhread->tsrm_ls;
 	// set interpreter context
-	tsrm_set_interpreter_context(TSRMLS_C);
+	tsrm_set_interpreter_context(tsrm_ls);
 	// link server context
 	SG(server_context) = FHREADS_SG(fhread->c_tsrm_ls, server_context);
 	// init executor
-	fhread_init_executor(fhread TSRMLS_CC);
+	fhread_init_executor(fhread);
 	// unlock fread mutex
 	pthread_mutex_unlock(&fhread->mutex);
+
+	zval result;
+	ZVAL_UNDEF(&result);
 	// exec run method
-	zend_execute((zend_op_array*) fhread->run TSRMLS_CC);
+	zend_execute((zend_op_array*) fhread->run, &result);
 	// exit thread
 	pthread_exit(NULL);
 #ifdef _WIN32
@@ -293,7 +180,7 @@ void *fhread_routine (void *arg)
 	Obtain the identifier of currents ls context */
 PHP_FUNCTION(fhread_tls_get_id)
 {
-	ZVAL_LONG(return_value, (long)TSRMLS_C);
+	ZVAL_LONG(return_value, (long)1);
 } /* }}} */
 
 /* {{{ proto fhread_mutex_init() */
@@ -310,7 +197,7 @@ PHP_FUNCTION(fhread_mutex_init)
 PHP_FUNCTION(fhread_mutex_lock)
 {
 	pthread_mutex_t *mutex;
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "l", &mutex)==SUCCESS && mutex) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "l", &mutex)==SUCCESS && mutex) {
 		pthread_mutex_lock(mutex);
 	}
 } /* }}} */
@@ -320,7 +207,7 @@ PHP_FUNCTION(fhread_mutex_lock)
 PHP_FUNCTION(fhread_mutex_unlock)
 {
 	pthread_mutex_t *mutex;
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "l", &mutex)==SUCCESS && mutex) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "l", &mutex)==SUCCESS && mutex) {
 		pthread_mutex_unlock(mutex);
 	}
 } /* }}} */
@@ -330,7 +217,7 @@ PHP_FUNCTION(fhread_mutex_unlock)
 PHP_FUNCTION(fhread_object_get_handle)
 {
 	zval *obj;
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "z", &obj) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "z", &obj) == FAILURE) {
 		RETURN_NULL();
 	}
 	ZVAL_LONG(return_value, Z_OBJ_HANDLE_P(obj));
@@ -350,7 +237,7 @@ PHP_FUNCTION(fhread_free_interpreter_context)
 	THREAD_T thread_id;
 	int status;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "l", &thread_id) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "l", &thread_id) == FAILURE) {
 		RETURN_NULL();
 	}
 
@@ -370,9 +257,10 @@ PHP_FUNCTION(fhread_create)
 	int status;
 	FHREAD* fhread;
 	zval *runnable = NULL, *threadId = NULL;
+	zend_string *name = NULL;
 
 	// parse function params
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "o|z", &runnable, &threadId) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "o|z", &runnable, &threadId) == FAILURE) {
 		RETURN_NULL();
 	}
 
@@ -380,10 +268,12 @@ PHP_FUNCTION(fhread_create)
 	Z_ADDREF_P(runnable);
 
 	// generate unique id
-	sprintf(gid,"%s:%d", Z_OBJ_CLASS_NAME_P(runnable), Z_OBJ_HANDLE_P(runnable));
+	// sprintf(gid,"%s:%d", Z_OBJ_CLASS_NAME_P(runnable), Z_OBJ_HANDLE_P(runnable));
 
+	name = zend_string_init(gid, strlen(gid), 0);
+/*
 	// check if fhread was alreade prepared for gid
-	if (zend_hash_find(&fhreads_objects, gid, strlen(gid) + 1, (void **)&fhread)  == FAILURE) {
+	if (zend_hash_find(&fhreads_objects, "asdf", strlen("asdf") + 1, (void **)&fhread)  == FAILURE) {
 		// prepare fhread
 		fhread = (FHREAD *)emalloc(sizeof(FHREAD));
 		// init executor flag
@@ -417,6 +307,7 @@ PHP_FUNCTION(fhread_create)
 		zval_dtor(threadId);
 		ZVAL_LONG(threadId, (long)fhread->thread_id);
 	}
+	*/
 
 	// return thread status
 	RETURN_LONG((long)status);
@@ -431,7 +322,7 @@ PHP_FUNCTION(fhread_join)
 	long thread_id;
 	int status;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "l", &thread_id) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "l", &thread_id) == FAILURE) {
 		RETURN_NULL();
 	}
 
@@ -445,7 +336,7 @@ PHP_FUNCTION(fhread_join)
  */
 PHP_MINIT_FUNCTION(fhreads)
 {
-	fhread_global_tsrm_ls = TSRMLS_C;
+	// fhread_global_tsrm_ls = TSRMLS_C;
 
 	// setup standard and fhreads object handlers
 	fhreads_zend_handlers = zend_get_std_object_handlers();
@@ -473,11 +364,11 @@ PHP_MINIT_FUNCTION(fhreads)
 	// set creator tsrm ls to null in main global context
 	fhread->c_tsrm_ls = NULL;
 	// set tsrm ls
-	fhread->tsrm_ls = TSRMLS_C;
+	// fhread->tsrm_ls = TSRMLS_C;
 	// init mutex
 	pthread_mutex_init(&fhread->mutex, NULL);
 	// add to globals hash
-	zend_hash_add(&fhreads_objects, "global_fhread", sizeof("global_fhread"), (void*)fhread, sizeof(FHREAD), NULL);
+	// zend_hash_add(&fhreads_objects, "global_fhread", sizeof("global_fhread"), (void*)fhread, sizeof(FHREAD), NULL);
 
 	return SUCCESS;
 } /* }}} */
@@ -501,12 +392,14 @@ PHP_MSHUTDOWN_FUNCTION(fhreads)
  */
 PHP_RINIT_FUNCTION(fhreads)
 {
+	/*
 	// let reallocate objects store at beginning
-	zend_uint new_objects_store_size = *EG(objects_store).size * 1024;
+	zend_ulong new_objects_store_size = *EG(objects_store).size * 1024;
 	if (*EG(objects_store).size != new_objects_store_size) {
 		*EG(objects_store).size = new_objects_store_size;
 		EG(objects_store).object_buckets = (zend_object_store_bucket *) erealloc(EG(objects_store).object_buckets, *EG(objects_store).size * sizeof(zend_object_store_bucket));
 	}
+	*/
 
 	return SUCCESS;
 } /* }}} */

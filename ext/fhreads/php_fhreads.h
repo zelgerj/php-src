@@ -79,7 +79,7 @@ typedef struct _fhread {
 	pthread_t thread_id;
 	pthread_mutex_t mutex;
 	void ***c_tsrm_ls;
-	TSRMLS_D;
+	void ***tsrm_ls;
 	zend_function *run;
 	zval **runnable;
 	int executor_inited;
