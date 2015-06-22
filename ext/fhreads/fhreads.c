@@ -36,6 +36,13 @@ static zend_object_handlers *fhreads_zend_handlers;
 static HashTable fhreads_objects;
 static pthread_mutex_t fhread_global_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+static fhread_objects_store fhreads;
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_fhread_create, 0, 0, 1)
+	ZEND_ARG_INFO(0, runnable)
+	ZEND_ARG_INFO(1, thread_id)
+ZEND_END_ARG_INFO()
+
 /* {{{ PHP_INI
  */
 /* Remove comments and fill if you need to have entries in php.ini
@@ -46,16 +53,61 @@ PHP_INI_END()
 */
 /* }}} */
 
+void fhread_object_store_init()
+{
+	// init size
+	fhreads.size = 1024;
+	// init top
+	fhreads.top = 1;
+	// init free_list_head
+	fhreads.free_list_head = -1;
+	// init object_buckets
+	fhreads.object_buckets = (fhread_object **) malloc(fhreads.size * sizeof(fhread_object*));
+	// erase data
+	memset(&fhreads.object_buckets[0], 0, sizeof(fhread_object*));
+}
+
+uint32_t fhread_object_store_put(fhread_object *object)
+{
+	// init vars
+	int handle;
+	// inc stores top
+	handle = fhreads.top++;
+	// add handle number to object itself
+	object->handle = handle;
+	// add object to store
+	fhreads.object_buckets[handle] = object;
+	// return handle
+	return handle;
+}
+
+fhread_object* fhread_object_init()
+{
+	// prepare fhread
+	fhread_object* fhread = (fhread_object *) malloc(sizeof(fhread_object));
+	// init executor flag
+	fhread->executor_inited = 0;
+	// set thread_id
+	fhread->thread_id = tsrm_thread_id();
+	// create new tsrm ls
+	fhread->tsrm_ls = tsrm_new_interpreter_context();
+	// init internal mutex
+	pthread_mutex_init(&fhread->mutex, NULL);
+	// return inited object
+	return fhread;
+}
+
+
 
 /* {{{ */
-void fhreads_global_free(FHREAD *fhread)
+void fhreads_global_free(fhread_object *fhread)
 {
 	printf("fhreads_global_free\n");
 	// efree(&fhread);
 } /* }}} */
 
 /* {{{ Initialises the executor in fhreads context */
-void fhread_init_executor(FHREAD *fhread) /* {{{ */
+void fhread_init_executor(fhread_object *fhread) /* {{{ */
 {
 	// check if executor was not inited before
 	if (fhread->executor_inited == 0) {
@@ -153,7 +205,16 @@ void fhread_init_executor(FHREAD *fhread) /* {{{ */
 void *fhread_routine (void *arg)
 {
 	// passed the object as argument
-	FHREAD* fhread = (FHREAD *) arg;
+	fhread_object* fhread = (fhread_object *) arg;
+
+	tsrm_set_interpreter_context(fhread->tsrm_ls);
+
+	// unlock fread mutex
+	pthread_mutex_unlock(&fhread->mutex);
+
+	printf("thread_routine\n");
+
+	/*
 	// init threadsafe manager local storage and create new context
 	void ***tsrm_ls = fhread->tsrm_ls;
 	// set interpreter context
@@ -169,8 +230,12 @@ void *fhread_routine (void *arg)
 	ZVAL_UNDEF(&result);
 	// exec run method
 	zend_execute((zend_op_array*) fhread->run, &result);
+
+	*/
 	// exit thread
 	pthread_exit(NULL);
+
+
 #ifdef _WIN32
 	return NULL; /* silence MSVC compiler */
 #endif
@@ -191,7 +256,6 @@ PHP_FUNCTION(fhread_mutex_init)
 		RETURN_LONG((ulong)mutex);
 	}
 } /* }}} */
-
 
 /* {{{ proto fhread_mutex_lock() */
 PHP_FUNCTION(fhread_mutex_lock)
@@ -252,65 +316,35 @@ PHP_FUNCTION(fhread_free_interpreter_context)
    handle is stored in thread_id which will be returned to php userland. */
 PHP_FUNCTION(fhread_create)
 {
-	char gid[512];
-	int gid_len;
-	int status;
-	FHREAD* fhread;
-	zval *runnable = NULL, *threadId = NULL;
-	zend_string *name = NULL;
+	// init vars
+	zval *runnable = NULL, *thread_id = NULL;
 
-	// parse function params
-	if (zend_parse_parameters(ZEND_NUM_ARGS(), "o|z", &runnable, &threadId) == FAILURE) {
-		RETURN_NULL();
-	}
+	// parse params
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "o|z/", &runnable, &thread_id) == FAILURE)
+		return;
 
-	// add ref to get not cached by garbage collector
-	Z_ADDREF_P(runnable);
-
-	// generate unique id
-	// sprintf(gid,"%s:%d", Z_OBJ_CLASS_NAME_P(runnable), Z_OBJ_HANDLE_P(runnable));
-
-	name = zend_string_init(gid, strlen(gid), 0);
-/*
-	// check if fhread was alreade prepared for gid
-	if (zend_hash_find(&fhreads_objects, "asdf", strlen("asdf") + 1, (void **)&fhread)  == FAILURE) {
-		// prepare fhread
-		fhread = (FHREAD *)emalloc(sizeof(FHREAD));
-		// init executor flag
-		fhread->executor_inited = 0;
-		// set creator tsrm ls
-		fhread->c_tsrm_ls = fhread_global_tsrm_ls;
-		// create new tsrm ls for thread routine
-		fhread->tsrm_ls = tsrm_new_interpreter_context();
-		// set runnable zval pointer
-		fhread->runnable = &runnable;
-		// init mutex
-		pthread_mutex_init(&fhread->mutex, NULL);
-		// add fhread object
-		zend_hash_add(&fhreads_objects, gid, strlen(gid) + 1, (void*)fhread, sizeof(FHREAD), NULL);
-	}
-
-	// inject fhread handlers for runnable zval
-	Z_OBJ_HT_P(runnable) = &fhreads_handlers;
-	// get run function from function table
-	zend_hash_find(&Z_OBJCE_P(runnable)->function_table, "run", sizeof("run"), (void**)&fhread->run);
+	// todo: check if free fhread object is available
+	fhread_object* fhread = fhread_object_init();
+	// add new object
+	uint32_t fhreads_object_handle = fhread_object_store_put(fhread);
 
 	// lock fhread
 	pthread_mutex_lock(&fhread->mutex);
 	// create thread and start fhread__routine
-	status = pthread_create(&fhread->thread_id, NULL, fhread_routine, fhread);
+	int pthread_status = pthread_create(&fhread->thread_id, NULL, fhread_routine, fhread);
 
+	// wait for thread routine to be reade
 	pthread_mutex_lock(&fhread->mutex);
 	pthread_mutex_unlock(&fhread->mutex);
 
-	if (threadId) {
-		zval_dtor(threadId);
-		ZVAL_LONG(threadId, (long)fhread->thread_id);
+	// check if second param was given for thread id reference
+	if (thread_id) {
+		zval_dtor(thread_id);
+		ZVAL_LONG(thread_id, (long)fhread->thread_id);
 	}
-	*/
 
 	// return thread status
-	RETURN_LONG((long)status);
+	RETURN_LONG((long)pthread_status);
 } /* }}} */
 
 /* {{{ proto fhread_join()
@@ -337,10 +371,13 @@ PHP_FUNCTION(fhread_join)
 PHP_MINIT_FUNCTION(fhreads)
 {
 	// fhread_global_tsrm_ls = TSRMLS_C;
+	fhread_object_store_init();
+
+	// init module globals
+	ZEND_INIT_MODULE_GLOBALS(fhreads, NULL, NULL);
 
 	// setup standard and fhreads object handlers
 	fhreads_zend_handlers = zend_get_std_object_handlers();
-
 	// copy handler for internal freaded objects usage
 	memcpy(&fhreads_handlers, fhreads_zend_handlers, sizeof(zend_object_handlers));
 
@@ -352,24 +389,6 @@ PHP_MINIT_FUNCTION(fhreads)
 	REGISTER_INI_ENTRIES();
 	*/
 
-	ZEND_INIT_MODULE_GLOBALS(fhreads, NULL, NULL);
-
-	zend_hash_init(&FHREADS_G(fhreads), 64, NULL, (dtor_func_t) fhreads_global_free, 1);
-	zend_hash_init(&fhreads_objects, 64, NULL, (dtor_func_t) fhreads_global_free, 1);
-
-	// prepare fhread
-	FHREAD* fhread = (FHREAD *)malloc(sizeof(FHREAD));
-	// init executor flag
-	fhread->executor_inited = 0;
-	// set creator tsrm ls to null in main global context
-	fhread->c_tsrm_ls = NULL;
-	// set tsrm ls
-	// fhread->tsrm_ls = TSRMLS_C;
-	// init mutex
-	pthread_mutex_init(&fhread->mutex, NULL);
-	// add to globals hash
-	// zend_hash_add(&fhreads_objects, "global_fhread", sizeof("global_fhread"), (void*)fhread, sizeof(FHREAD), NULL);
-
 	return SUCCESS;
 } /* }}} */
 
@@ -380,10 +399,6 @@ PHP_MSHUTDOWN_FUNCTION(fhreads)
 	/* uncomment this line if you have INI entries
 	UNREGISTER_INI_ENTRIES();
 	*/
-
-	zend_hash_destroy(&FHREADS_G(fhreads));
-	zend_hash_destroy(&fhreads_objects);
-
 	return SUCCESS;
 } /* }}} */
 
@@ -435,7 +450,7 @@ const zend_function_entry fhreads_functions[] = {
 	PHP_FE(fhread_object_get_handle, 		NULL)
 	PHP_FE(fhread_free_interpreter_context, NULL)
 	PHP_FE(fhread_self, 					NULL)
-	PHP_FE(fhread_create, 					NULL)
+	PHP_FE(fhread_create, 					arginfo_fhread_create)
 	PHP_FE(fhread_join, 					NULL)
 	PHP_FE(fhread_mutex_init, 				NULL)
 	PHP_FE(fhread_mutex_lock, 				NULL)

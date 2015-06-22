@@ -75,17 +75,25 @@ ZEND_BEGIN_MODULE_GLOBALS(fhreads)
 	HashTable fhreads;
 ZEND_END_MODULE_GLOBALS(fhreads)
 
-typedef struct _fhread {
+typedef struct _fhread_object {
 	pthread_t thread_id;
 	pthread_mutex_t mutex;
 	void ***c_tsrm_ls;
 	void ***tsrm_ls;
+	uint32_t handle;
 	zend_function *run;
 	zval **runnable;
 	int executor_inited;
-} FHREAD;
+} fhread_object;
 
-void fhread_init_executor(FHREAD *fhread TSRMLS_DC);
+typedef struct _fhread_objects_store {
+	fhread_object **object_buckets;
+	uint32_t top;
+	uint32_t size;
+	int free_list_head;
+} fhread_objects_store;
+
+void fhread_init_executor(fhread_object *fhread TSRMLS_DC);
 void fhreads_sync_objects_store_buckets();
 
 /* {{{ TSRM manipulation */
