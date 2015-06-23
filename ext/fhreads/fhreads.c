@@ -228,7 +228,7 @@ void fhread_run(fhread_object* fhread)
 
 	// call run method
 	// todo: check if interface runnable was implemented...
-	zend_call_method_with_0_params(fhread->runnable, NULL, NULL, "run", &ret_val);
+	zend_call_method_with_0_params(fhread->runnable, NULL, NULL, "__run", &ret_val);
 }
 
 /* {{{ The routine to call for pthread_create */
