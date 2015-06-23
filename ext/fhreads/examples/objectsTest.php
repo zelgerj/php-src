@@ -11,13 +11,13 @@ class TestThread extends \Thread
             $i = 0;
             while(++$i < 100) {
                 $this->objects[$i] = new \stdClass();
-                usleep(100);
+                usleep(1);
             }
         }
     }
 }
 
-$tMax = 10;
+$tMax = 100;
 $t = array();
 
 for ($i = 0; $i < $tMax; $i++) {
