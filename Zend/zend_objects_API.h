@@ -42,9 +42,9 @@
 
 typedef struct _zend_objects_store {
 	zend_object **object_buckets;
-	uint32_t *top;
+	uint32_t top;
 	uint32_t size;
-	int *free_list_head;
+	int free_list_head;
 } zend_objects_store;
 
 /* Global store handling functions */

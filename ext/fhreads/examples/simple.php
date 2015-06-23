@@ -1,22 +1,31 @@
 <?php 
 
-class TestRunnable
-{
-    public $test = 'asdf';
+// to be compatible with pthreads lib
+if (!class_exists('\Thread')) {
+    require_once __DIR__ . DIRECTORY_SEPARATOR . "Thread.php";
+}
+
+class TestThread extends Thread
+{   
+    public function __construct($data)
+    {
+        $this->data = $data;
+    }
     
     public function run() {
-        $this->asdf = 'aaaa';
-        echo __METHOD__ . PHP_EOL;
+        $this->data->{$this->getThreadId()} = $this;
+        $this->data->testVar = 'hahaha';
+        $this->data->testObject = new \stdClass();
     }
 }
 
-$r = new TestRunnable();
+$data = new \stdClass();
 
-$status = fhread_create($r, $threadId);
-fhread_join($threadId);
+$r = new TestThread($data);
+$r->start();
+$r->join();
 
-sleep(1);
 
-var_dump($r);
+var_dump($data);
 
 echo "finished script..." . PHP_EOL . PHP_EOL;

@@ -11,6 +11,7 @@ class TestThread extends \Thread
             $i = 0;
             while(++$i < 100) {
                 $this->objects[$i] = new \stdClass();
+                usleep(100);
             }
         }
     }
