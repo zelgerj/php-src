@@ -81,9 +81,8 @@ typedef struct _fhread_object {
 	void ***c_tsrm_ls;
 	void ***tsrm_ls;
 	uint32_t handle;
-	zend_function *run;
-	zval **runnable;
-	int executor_inited;
+	zval *runnable;
+	int is_initialized;
 } fhread_object;
 
 typedef struct _fhread_objects_store {

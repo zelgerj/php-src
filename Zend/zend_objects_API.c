@@ -25,12 +25,16 @@
 #include "zend_API.h"
 #include "zend_objects_API.h"
 
+uint32_t zend_global_top = 1;
+int zend_global_free_list_head = -1;
+static pthread_mutex_t zend_objects_store_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 ZEND_API void zend_objects_store_init(zend_objects_store *objects, uint32_t init_size)
 {
 	objects->object_buckets = (zend_object **) emalloc(init_size * sizeof(zend_object*));
-	objects->top = 1; /* Skip 0 so that handles are true */
+	objects->top = &zend_global_top; /* Skip 0 so that handles are true */
 	objects->size = init_size;
-	objects->free_list_head = -1;
+	objects->free_list_head = &zend_global_free_list_head;
 	memset(&objects->object_buckets[0], 0, sizeof(zend_object*));
 }
 
@@ -42,9 +46,9 @@ ZEND_API void zend_objects_store_destroy(zend_objects_store *objects)
 
 ZEND_API void zend_objects_store_call_destructors(zend_objects_store *objects)
 {
-	if (objects->top > 1) {
+	if (*objects->top > 1) {
 		zend_object **obj_ptr = objects->object_buckets + 1;
-		zend_object **end = objects->object_buckets + objects->top;
+		zend_object **end = objects->object_buckets + *objects->top;
 
 		do {
 			zend_object *obj = *obj_ptr;
@@ -64,9 +68,9 @@ ZEND_API void zend_objects_store_call_destructors(zend_objects_store *objects)
 
 ZEND_API void zend_objects_store_mark_destructed(zend_objects_store *objects)
 {
-	if (objects->object_buckets && objects->top > 1) {
+	if (objects->object_buckets && *objects->top > 1) {
 		zend_object **obj_ptr = objects->object_buckets + 1;
-		zend_object **end = objects->object_buckets + objects->top;
+		zend_object **end = objects->object_buckets + *objects->top;
 
 		do {
 			zend_object *obj = *obj_ptr;
@@ -83,13 +87,13 @@ ZEND_API void zend_objects_store_free_object_storage(zend_objects_store *objects
 {
 	zend_object **obj_ptr, **end, *obj;
 
-	if (objects->top <= 1) {
+	if (*objects->top <= 1) {
 		return;
 	}
 
 	/* Free object contents, but don't free objects themselves */
 	end = objects->object_buckets + 1;
-	obj_ptr = objects->object_buckets + objects->top;
+	obj_ptr = objects->object_buckets + *objects->top;
 
 	do {
 		obj_ptr--;
@@ -109,7 +113,7 @@ ZEND_API void zend_objects_store_free_object_storage(zend_objects_store *objects
 	/* Free objects themselves if they now have a refcount of 0, which means that
 	 * they were previously part of a cycle. Everything else will report as a leak.
 	 * Cycles are allowed because not all internal objects currently support GC. */
-	end = objects->object_buckets + objects->top;
+	end = objects->object_buckets + *objects->top;
 	while (obj_ptr != end) {
 		obj = *obj_ptr;
 		if (IS_OBJ_VALID(obj) && GC_REFCOUNT(obj) == 0) {
@@ -129,23 +133,29 @@ ZEND_API void zend_objects_store_put(zend_object *object)
 {
 	int handle;
 
-	if (EG(objects_store).free_list_head != -1) {
-		handle = EG(objects_store).free_list_head;
-		EG(objects_store).free_list_head = GET_OBJ_BUCKET_NUMBER(EG(objects_store).object_buckets[handle]);
+	pthread_mutex_lock(&zend_objects_store_mutex);
+
+	if (*EG(objects_store).free_list_head != -1) {
+		handle = *EG(objects_store).free_list_head;
+		*EG(objects_store).free_list_head = GET_OBJ_BUCKET_NUMBER(EG(objects_store).object_buckets[handle]);
 	} else {
-		if (EG(objects_store).top == EG(objects_store).size) {
+		if (*EG(objects_store).top == EG(objects_store).size) {
 			EG(objects_store).size <<= 1;
 			EG(objects_store).object_buckets = (zend_object **) erealloc(EG(objects_store).object_buckets, EG(objects_store).size * sizeof(zend_object*));
 		}
-		handle = EG(objects_store).top++;
+		handle = ++*EG(objects_store).top;
 	}
 	object->handle = handle;
 	EG(objects_store).object_buckets[handle] = object;
+
+	pthread_mutex_unlock(&zend_objects_store_mutex);
 }
 
-#define ZEND_OBJECTS_STORE_ADD_TO_FREE_LIST(handle)															\
-            SET_OBJ_BUCKET_NUMBER(EG(objects_store).object_buckets[handle], EG(objects_store).free_list_head);	\
-			EG(objects_store).free_list_head = handle;
+#define ZEND_OBJECTS_STORE_ADD_TO_FREE_LIST(handle) \
+			pthread_mutex_lock(&zend_objects_store_mutex); \
+            SET_OBJ_BUCKET_NUMBER(EG(objects_store).object_buckets[handle], *EG(objects_store).free_list_head);	\
+			*EG(objects_store).free_list_head = handle; \
+			pthread_mutex_unlock(&zend_objects_store_mutex);
 
 ZEND_API void zend_objects_store_free(zend_object *object) /* {{{ */
 {

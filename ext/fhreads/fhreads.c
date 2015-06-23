@@ -53,6 +53,7 @@ PHP_INI_END()
 */
 /* }}} */
 
+/* {{{ Initialises the fhread object store */
 void fhread_object_store_init()
 {
 	// init size
@@ -66,7 +67,9 @@ void fhread_object_store_init()
 	// erase data
 	memset(&fhreads.object_buckets[0], 0, sizeof(fhread_object*));
 }
+/* }}} */
 
+/* {{{ Adds a fhread object to store */
 uint32_t fhread_object_store_put(fhread_object *object)
 {
 	// init vars
@@ -80,24 +83,24 @@ uint32_t fhread_object_store_put(fhread_object *object)
 	// return handle
 	return handle;
 }
+/* }}} */
 
-fhread_object* fhread_object_init()
+/* {{{ Creates and returns new fhread object */
+fhread_object* fhread_object_create()
 {
 	// prepare fhread
 	fhread_object* fhread = (fhread_object *) malloc(sizeof(fhread_object));
 	// init executor flag
-	fhread->executor_inited = 0;
+	fhread->is_initialized = 0;
 	// set thread_id
 	fhread->thread_id = tsrm_thread_id();
-	// create new tsrm ls
-	fhread->tsrm_ls = tsrm_new_interpreter_context();
+	// set creator tsrm ls
+	fhread->c_tsrm_ls = tsrm_get_ls_cache();
 	// init internal mutex
 	pthread_mutex_init(&fhread->mutex, NULL);
 	// return inited object
 	return fhread;
 }
-
-
 
 /* {{{ */
 void fhreads_global_free(fhread_object *fhread)
@@ -106,135 +109,138 @@ void fhreads_global_free(fhread_object *fhread)
 	// efree(&fhread);
 } /* }}} */
 
+/* {{{ Initialises the compile in fhreads context */
+void fhread_init_compiler(fhread_object *fhread) /* {{{ */
+{
+	// call original compiler
+	init_compiler();
+}
+/* }}} */
+
 /* {{{ Initialises the executor in fhreads context */
 void fhread_init_executor(fhread_object *fhread) /* {{{ */
 {
-	// check if executor was not inited before
-	if (fhread->executor_inited == 0) {
+	zend_init_fpu();
 
-		pthread_mutex_lock(&fhread_global_mutex);
-
-		zend_init_fpu();
-
-		ZVAL_NULL(&EG(uninitialized_zval));
-		ZVAL_NULL(&EG(error_zval));
-
-		/*
-		EG(uninitialized_zval_ptr)=&EG(uninitialized_zval);
-		EG(error_zval_ptr)=&EG(error_zval);
-		*/
-/* destroys stack frame, therefore makes core dumps worthless */
+	ZVAL_NULL(&EG(uninitialized_zval));
+	ZVAL_NULL(&EG(error_zval));
+	// destroys stack frame, therefore makes core dumps worthless
 #if 0&&ZEND_DEBUG
 	original_sigsegv_handler = signal(SIGSEGV, zend_handle_sigsegv);
 #endif
 
-		/*
-		EG(return_value_ptr_ptr) = NULL;
-		*/
+	EG(symtable_cache_ptr) = EG(symtable_cache) - 1;
+	EG(symtable_cache_limit) = EG(symtable_cache) + SYMTABLE_CACHE_SIZE - 1;
+	EG(no_extensions) = 0;
 
-		EG(symtable_cache_ptr) = EG(symtable_cache) - 1;
-		EG(symtable_cache_limit) = EG(symtable_cache) + SYMTABLE_CACHE_SIZE - 1;
-		EG(no_extensions) = 0;
+	EG(function_table) = CG(function_table);
+	EG(class_table) = CG(class_table);
 
-		/*
-		EG(in_execution) = 0;
-		*/
+	EG(in_autoload) = NULL;
+	EG(autoload_func) = NULL;
+	EG(error_handling) = EH_NORMAL;
 
-		EG(in_autoload) = NULL;
-		EG(autoload_func) = NULL;
-		EG(error_handling) = EH_NORMAL;
+	zend_vm_stack_init();
 
-		// link functions
-		EG(function_table) = FHREADS_CG(fhread->c_tsrm_ls, function_table);
-		// link classes
-		EG(class_table) = FHREADS_CG(fhread->c_tsrm_ls, class_table);
-		// link constants
-		EG(zend_constants) = FHREADS_EG(fhread->c_tsrm_ls, zend_constants);
-		// link regular list
-		EG(regular_list) = FHREADS_EG(fhread->c_tsrm_ls, regular_list);
-		// link objects_store
-		EG(objects_store) = FHREADS_EG(fhread->c_tsrm_ls, objects_store);
+	zend_hash_init(&EG(symbol_table), 64, NULL, ZVAL_PTR_DTOR, 0);
+	EG(valid_symbol_table) = 1;
 
-		zend_vm_stack_init();
+	//zend_llist_apply(&zend_extensions, (llist_apply_func_t) zend_extension_activator);
+	//zend_hash_init(&EG(included_files), 8, NULL, NULL, 0);
 
-		pthread_mutex_unlock(&fhread_global_mutex);
+	EG(ticks_count) = 0;
 
-		EG(ticks_count) = 0;
-		ZVAL_UNDEF(&EG(user_error_handler));
-		EG(current_execute_data) = NULL;
+	ZVAL_UNDEF(&EG(user_error_handler));
 
-		EG(full_tables_cleanup) = 0;
+	EG(current_execute_data) = NULL;
+
+	zend_stack_init(&EG(user_error_handlers_error_reporting), sizeof(int));
+	zend_stack_init(&EG(user_error_handlers), sizeof(zval));
+	zend_stack_init(&EG(user_exception_handlers), sizeof(zval));
+
+	// link included table
+	EG(included_files) = FHREADS_EG(fhread->c_tsrm_ls, included_files);
+	// link functions
+	EG(function_table) = FHREADS_CG(fhread->c_tsrm_ls, function_table);
+	// link classes
+	EG(class_table) = FHREADS_CG(fhread->c_tsrm_ls, class_table);
+	// link constants
+	EG(zend_constants) = FHREADS_EG(fhread->c_tsrm_ls, zend_constants);
+	// link regular list
+	EG(regular_list) = FHREADS_EG(fhread->c_tsrm_ls, regular_list);
+	// link objects_store
+	EG(objects_store) = FHREADS_EG(fhread->c_tsrm_ls, objects_store);
+
+	EG(full_tables_cleanup) = 0;
 	#ifdef ZEND_WIN32
 		EG(timed_out) = 0;
 	#endif
 
-		EG(exception) = NULL;
-		EG(prev_exception) = NULL;
-		EG(scope) = NULL;
+	EG(exception) = NULL;
+	EG(prev_exception) = NULL;
 
-		/*
-		EG(called_scope) = NULL;
-		EG(This) = NULL;
-		EG(active_op_array) = NULL;
-		*/
+	EG(ht_iterators_count) = sizeof(EG(ht_iterators_slots)) / sizeof(HashTableIterator);
+	EG(ht_iterators_used) = 0;
+	EG(ht_iterators) = EG(ht_iterators_slots);
+	memset(EG(ht_iterators), 0, sizeof(EG(ht_iterators_slots)));
 
-		EG(active) = 1;
-
-		/*
-		EG(start_op) = NULL;
-		*/
-
-		// set executor inited flag
-		fhread->executor_inited = 1;
-	}
-
-	// init executor globals for function run to execute
-	/*
-	EG(This) = (*fhread->runnable);
-	EG(active_op_array) = (zend_op_array*) fhread->run;
-	*/
-	EG(scope) = Z_OBJCE_P(*fhread->runnable);
-	/*
-	EG(called_scope) = EG(scope);
-	EG(in_execution) = 1;
-	*/
+	EG(active) = 1;
 }
 /* }}} */
+
+/* {{{ Initialises the fhreads context */
+void fhread_init(fhread_object* fhread)
+{
+	// check if initialization is needed
+	if (fhread->is_initialized != 1) {
+		// lock global mutex for context initalisation
+		pthread_mutex_lock(&fhread_global_mutex);
+		// create new interpreter context
+		fhread->tsrm_ls = tsrm_new_interpreter_context();
+		// set prepared thread ls
+		tsrm_set_interpreter_context(fhread->tsrm_ls);
+		// link server context
+		SG(server_context) = FHREADS_SG(fhread->c_tsrm_ls, server_context);
+		// init compiler
+		fhread_init_compiler(fhread);
+		// init executor
+		fhread_init_executor(fhread);
+		// set initialized flag to be true
+		fhread->is_initialized = 1;
+		// unlock global mutex
+		pthread_mutex_unlock(&fhread_global_mutex);
+	}
+	// unlock fhread mutex
+	pthread_mutex_unlock(&fhread->mutex);
+
+}
+/* }}} */
+
+/* {{{ Run the runnable zval in fhread context */
+void fhread_run(fhread_object* fhread)
+{
+	// init fhread before run it
+	fhread_init(fhread);
+
+	// init return var zval
+	zval ret_val;
+	ZVAL_UNDEF(&ret_val);
+
+	// call run method
+	// todo: check if interface runnable was implemented...
+	zend_call_method_with_0_params(fhread->runnable, NULL, NULL, "run", &ret_val);
+}
 
 /* {{{ The routine to call for pthread_create */
 void *fhread_routine (void *arg)
 {
 	// passed the object as argument
 	fhread_object* fhread = (fhread_object *) arg;
+	// run fhread
+	fhread_run(fhread);
 
-	tsrm_set_interpreter_context(fhread->tsrm_ls);
-
-	// unlock fread mutex
-	pthread_mutex_unlock(&fhread->mutex);
-
-	printf("thread_routine\n");
-
-	/*
-	// init threadsafe manager local storage and create new context
-	void ***tsrm_ls = fhread->tsrm_ls;
-	// set interpreter context
-	tsrm_set_interpreter_context(tsrm_ls);
-	// link server context
-	SG(server_context) = FHREADS_SG(fhread->c_tsrm_ls, server_context);
-	// init executor
-	fhread_init_executor(fhread);
-	// unlock fread mutex
-	pthread_mutex_unlock(&fhread->mutex);
-
-	zval result;
-	ZVAL_UNDEF(&result);
-	// exec run method
-	zend_execute((zend_op_array*) fhread->run, &result);
-
-	*/
 	// exit thread
 	pthread_exit(NULL);
-
 
 #ifdef _WIN32
 	return NULL; /* silence MSVC compiler */
@@ -323,25 +329,31 @@ PHP_FUNCTION(fhread_create)
 	if (zend_parse_parameters(ZEND_NUM_ARGS(), "o|z/", &runnable, &thread_id) == FAILURE)
 		return;
 
-	// todo: check if free fhread object is available
-	fhread_object* fhread = fhread_object_init();
+	// todo: check if free fhread object is available an reuse it...
+	fhread_object* fhread = fhread_object_create();
 	// add new object
 	uint32_t fhreads_object_handle = fhread_object_store_put(fhread);
 
-	// lock fhread
+	// inject fhread handlers for runnable zval
+	Z_OBJ_HT_P(runnable) = &fhreads_handlers;
+
+	// set runnable zval
+	fhread->runnable = runnable;
+
+	// lock fhread mutex to wait for everything being ready
 	pthread_mutex_lock(&fhread->mutex);
+
 	// create thread and start fhread__routine
 	int pthread_status = pthread_create(&fhread->thread_id, NULL, fhread_routine, fhread);
-
-	// wait for thread routine to be reade
-	pthread_mutex_lock(&fhread->mutex);
-	pthread_mutex_unlock(&fhread->mutex);
 
 	// check if second param was given for thread id reference
 	if (thread_id) {
 		zval_dtor(thread_id);
 		ZVAL_LONG(thread_id, (long)fhread->thread_id);
 	}
+
+	pthread_mutex_lock(&fhread->mutex);
+	pthread_mutex_unlock(&fhread->mutex);
 
 	// return thread status
 	RETURN_LONG((long)pthread_status);
@@ -383,7 +395,7 @@ PHP_MINIT_FUNCTION(fhreads)
 
 	// override object handlers
 	// fhreads_handlers.write_property = fhread_write_property;
-	fhreads_handlers.get_gc = NULL;
+	// fhreads_handlers.get_gc = NULL;
 
 	/* If you have INI entries, uncomment these lines 
 	REGISTER_INI_ENTRIES();
@@ -408,14 +420,15 @@ PHP_MSHUTDOWN_FUNCTION(fhreads)
 PHP_RINIT_FUNCTION(fhreads)
 {
 	/*
-	// let reallocate objects store at beginning
-	zend_ulong new_objects_store_size = *EG(objects_store).size * 1024;
-	if (*EG(objects_store).size != new_objects_store_size) {
-		*EG(objects_store).size = new_objects_store_size;
-		EG(objects_store).object_buckets = (zend_object_store_bucket *) erealloc(EG(objects_store).object_buckets, *EG(objects_store).size * sizeof(zend_object_store_bucket));
-	}
-	*/
+	// recalc object store size
+	uint32_t new_objects_store_size = EG(objects_store).size * 1024;
 
+	// reallocate objects store at beginning
+	if (EG(objects_store).size != new_objects_store_size) {
+		EG(objects_store).size = new_objects_store_size;
+		EG(objects_store).object_buckets = (zend_object **) erealloc(EG(objects_store).object_buckets, EG(objects_store).size * sizeof(zend_object*));
+	}
+	 */
 	return SUCCESS;
 } /* }}} */
 

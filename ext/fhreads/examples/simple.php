@@ -2,16 +2,21 @@
 
 class TestRunnable
 {
+    public $test = 'asdf';
+    
     public function run() {
-        echo 'hallo' . PHP_EOL;
+        $this->asdf = 'aaaa';
+        echo __METHOD__ . PHP_EOL;
     }
 }
 
-$runnable = new TestRunnable();
-$status = fhread_create($runnable, $threadId);
+$r = new TestRunnable();
 
-var_dump($status);
-var_dump($threadId);
+$status = fhread_create($r, $threadId);
+fhread_join($threadId);
 
+sleep(1);
+
+var_dump($r);
 
 echo "finished script..." . PHP_EOL . PHP_EOL;

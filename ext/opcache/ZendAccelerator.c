@@ -2174,7 +2174,7 @@ static void zend_accel_fast_shutdown(void)
 		return;
 	}
 
-	if (EG(objects_store).top > 1 || zend_hash_num_elements(&EG(regular_list)) > 0) {
+	if (*EG(objects_store).top > 1 || zend_hash_num_elements(&EG(regular_list)) > 0) {
 		/* We don't have to destroy all zvals if they cannot call any destructors */
 		zend_try {
 			ZEND_HASH_REVERSE_FOREACH(&EG(symbol_table), 0) {
