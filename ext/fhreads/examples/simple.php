@@ -5,34 +5,37 @@ if (!class_exists('\Thread')) {
     require_once __DIR__ . DIRECTORY_SEPARATOR . "Thread.php";
 }
 
+class Storage {
+    public $data = [];
+    public function set($key, $value) {
+        $this->data[$key] = $value;
+    }
+}
+
 class TestThread extends Thread
 {   
     public function __construct($data)
     {
         $this->data = $data;
-        $this->data->testObjects = array();
     }
     
     public function run() {
-        $this->data->{$this->getThreadId()} = $this->getThreadId();
-        $this->data->testVar = 'hahaha';
-        $this->data->testObjects[] = new \stdClass();
+        echo __METHOD__ . ':' . $this->getThreadId() . PHP_EOL;
+        $this->data->set($this->getThreadId(), 'wasHere');
     }
 }
 
-$data = new \stdClass();
-
-$t = array();
+$data = new Storage();
 
 $index = 10;
+$t = [];
+
 for ($i = 0; $i < $index; $i++) {
     $t[$i] = new TestThread($data);
 }
-
 for ($i = 0; $i < $index; $i++) {
     $t[$i]->start();
 }
-
 for ($i = 0; $i < $index; $i++) {
     $t[$i]->join();
 }

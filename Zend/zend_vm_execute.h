@@ -391,6 +391,7 @@ ZEND_API void execute_ex(zend_execute_data *ex)
 
 	while (1) {
     	int ret;
+
 		if (UNEXPECTED((ret = ((opcode_handler_t)OPLINE->handler)(ZEND_OPCODE_HANDLER_ARGS_PASSTHRU)) != 0)) {
 #ifdef ZEND_VM_FP_GLOBAL_REG
 			execute_data = orig_execute_data;

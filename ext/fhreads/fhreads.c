@@ -142,7 +142,8 @@ void fhread_init_executor(fhread_object *fhread) /* {{{ */
 
 	zend_vm_stack_init();
 
-	zend_hash_init(&EG(symbol_table), 64, NULL, ZVAL_PTR_DTOR, 0);
+	//zend_hash_init(&EG(symbol_table), 64, NULL, ZVAL_PTR_DTOR, 0);
+	EG(symbol_table) = FHREADS_EG(fhread->c_tsrm_ls, symbol_table);
 	EG(valid_symbol_table) = 1;
 
 	//zend_llist_apply(&zend_extensions, (llist_apply_func_t) zend_extension_activator);
@@ -158,7 +159,7 @@ void fhread_init_executor(fhread_object *fhread) /* {{{ */
 	zend_stack_init(&EG(user_error_handlers), sizeof(zval));
 	zend_stack_init(&EG(user_exception_handlers), sizeof(zval));
 
-	// link included table
+	// link included files
 	EG(included_files) = FHREADS_EG(fhread->c_tsrm_ls, included_files);
 	// link functions
 	EG(function_table) = FHREADS_CG(fhread->c_tsrm_ls, function_table);
@@ -171,11 +172,14 @@ void fhread_init_executor(fhread_object *fhread) /* {{{ */
 	// link objects_store
 	EG(objects_store) = FHREADS_EG(fhread->c_tsrm_ls, objects_store);
 
+
+
 	EG(full_tables_cleanup) = 0;
 	#ifdef ZEND_WIN32
 		EG(timed_out) = 0;
 	#endif
 
+	EG(scope) = NULL;
 	EG(exception) = NULL;
 	EG(prev_exception) = NULL;
 
@@ -196,9 +200,9 @@ void fhread_init(fhread_object* fhread)
 		// lock global mutex for context initalisation
 		pthread_mutex_lock(&fhread_global_mutex);
 		// create new interpreter context
-		fhread->tsrm_ls = tsrm_new_interpreter_context();
+		void ***tsrm_ls = fhread->tsrm_ls = tsrm_new_interpreter_context();
 		// set prepared thread ls
-		tsrm_set_interpreter_context(fhread->tsrm_ls);
+		tsrm_set_interpreter_context(tsrm_ls);
 		// link server context
 		SG(server_context) = FHREADS_SG(fhread->c_tsrm_ls, server_context);
 		// init compiler
@@ -222,23 +226,18 @@ void fhread_run(fhread_object* fhread)
 	// init fhread before run it
 	fhread_init(fhread);
 
-	// init return var zval
-	zval ret_val;
-	ZVAL_UNDEF(&ret_val);
-
 	// call run method
 	// todo: check if interface runnable was implemented...
-	zend_call_method_with_0_params(fhread->runnable, NULL, NULL, "__run", &ret_val);
+	zend_call_method_with_0_params(fhread->runnable, Z_OBJCE_P(fhread->runnable), NULL, "run", NULL);
 }
 
 /* {{{ The routine to call for pthread_create */
-void *fhread_routine (void *arg)
+void *fhread_routine (void *fobj)
 {
-	// passed the object as argument
-	fhread_object* fhread = (fhread_object *) arg;
+	// cast back to fhread_object
+	fhread_object* fhread = (fhread_object *) fobj;
 	// run fhread
 	fhread_run(fhread);
-
 	// exit thread
 	pthread_exit(NULL);
 
@@ -335,9 +334,10 @@ PHP_FUNCTION(fhread_create)
 	uint32_t fhreads_object_handle = fhread_object_store_put(fhread);
 
 	// inject fhread handlers for runnable zval
-	Z_OBJ_HT_P(runnable) = &fhreads_handlers;
+	// Z_OBJ_HT_P(runnable) = &fhreads_handlers;
+	// add runnable zval to fhread object
+	SEPARATE_ZVAL(runnable);
 
-	// set runnable zval
 	fhread->runnable = runnable;
 
 	// lock fhread mutex to wait for everything being ready
@@ -395,7 +395,7 @@ PHP_MINIT_FUNCTION(fhreads)
 
 	// override object handlers
 	// fhreads_handlers.write_property = fhread_write_property;
-	// fhreads_handlers.get_gc = NULL;
+	fhreads_handlers.get_gc = NULL;
 
 	/* If you have INI entries, uncomment these lines 
 	REGISTER_INI_ENTRIES();

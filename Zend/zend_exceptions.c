@@ -46,6 +46,9 @@ void zend_exception_set_previous(zend_object *exception, zend_object *add_previo
 	if (exception == add_previous || !add_previous || !exception) {
 		return;
 	}
+
+	printf("add_previous handle: %d\n", add_previous->handle);
+
 	ZVAL_OBJ(&tmp, add_previous);
 	if (!instanceof_function(Z_OBJCE(tmp), base_exception_ce)) {
 		zend_error_noreturn(E_CORE_ERROR, "Cannot set non exception as previous exception");

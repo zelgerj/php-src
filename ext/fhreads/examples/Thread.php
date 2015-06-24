@@ -47,7 +47,7 @@ abstract class Thread implements Runnable
 {
     /**
      * Defines thread states
-     * 
+     *
      * @var int
      */
     const STATE_STARTED = 1;
@@ -55,7 +55,7 @@ abstract class Thread implements Runnable
     const STATE_WAITING = 4;
     const STATE_JOINED = 8;
     const STATE_ERROR = 16;
-    
+
     /**
      * Holds thread id if started
      *
@@ -69,10 +69,10 @@ abstract class Thread implements Runnable
      * @var int
      */
     protected $mutex = null;
-    
+
     /**
      * Holds thread state flag
-     * 
+     *
      * @var int
      */
     protected $state = 0;
@@ -83,21 +83,6 @@ abstract class Thread implements Runnable
      * @return void
      */
     abstract function run();
-    
-    /**
-     * Internal function which will be called for runnable to run
-     * 
-     * @return void
-     */
-    private function __run()
-    {
-        // check if was started already
-        if ($this->getState() !== self::STATE_STARTED) {
-            throw new \Exception('Thread has not been started yet!');
-        }
-        $this->setState(self::STATE_RUNNING);
-        $this->run();
-    }
 
     /**
      * Start method which will prepare, create and starts a thread
@@ -110,21 +95,22 @@ abstract class Thread implements Runnable
         if ($this->getState() >= self::STATE_STARTED) {
             throw new \Exception('Thread has been started already!');
         }
+        $this->setState(self::STATE_STARTED);
         // init thread mutex
         $this->mutex = fhread_mutex_init();
         // create, start thread and save thread id
         $status = fhread_create($this, $this->id);
         if ($status === 0) {
-            $this->setState(self::STATE_STARTED);
+            $this->setState(self::STATE_RUNNING);
             return true;
         }
         $this->setState(self::STATE_ERROR);
         return false;
     }
-    
+
     /**
      * Returns the current state of thread object
-     * 
+     *
      * @return int
      */
     public function getState() {
@@ -133,10 +119,10 @@ abstract class Thread implements Runnable
         $this->unlock();
         return $state;
     }
-    
+
     /**
      * Sets the given state for thread object
-     * 
+     *
      * @return void
      */
     public function setState($state) {
@@ -160,7 +146,7 @@ abstract class Thread implements Runnable
         if ($this->getState() < self::STATE_STARTED) {
             throw new \Exception('Thread has not been started yet!');
         }
-        
+
         fhread_join($this->getThreadId());
         $this->setState(self::STATE_JOINED);
     }
@@ -191,7 +177,7 @@ abstract class Thread implements Runnable
 
     /**
      * Executes given closure synchronized
-     * 
+     *
      * @param callable $sync
      */
     public function synchronized(\Closure $sync)
@@ -238,9 +224,9 @@ abstract class Thread implements Runnable
     {
         // check if thread is between joined and started state to join it automatically
         // if php process is going to shutdown
-        if (($this->getState() > self::STATE_STARTED) && $this->getState() < self::STATE_JOINED) {
-            $this->join();
-        }
+        // if (($this->getState() > self::STATE_STARTED) && $this->getState() < self::STATE_JOINED) {
+        //     $this->join();
+        // }
         // in every other case do nothing
     }
 
