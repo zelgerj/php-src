@@ -6,9 +6,17 @@ if (!class_exists('\Thread')) {
 }
 
 class Storage {
+    private $mutex;
     public $data = [];
+    
+    public function __construct() {
+        $this->mutex = fhread_mutex_init();
+    }
+    
     public function set($key, $value) {
+        fhread_mutex_lock($this->mutex);
         $this->data[$key] = $value;
+        fhread_mutex_unlock($this->mutex);
     }
 }
 
@@ -20,8 +28,7 @@ class TestThread extends Thread
     }
     
     public function run() {
-        echo __METHOD__ . ':' . $this->getThreadId() . PHP_EOL;
-        $this->data->set($this->getThreadId(), 'wasHere');
+        $this->data->set($this->getThreadId(), $this->getThreadId());
     }
 }
 

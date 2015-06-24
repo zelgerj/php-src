@@ -334,7 +334,7 @@ PHP_FUNCTION(fhread_create)
 	uint32_t fhreads_object_handle = fhread_object_store_put(fhread);
 
 	// inject fhread handlers for runnable zval
-	// Z_OBJ_HT_P(runnable) = &fhreads_handlers;
+	Z_OBJ_HT_P(runnable) = &fhreads_handlers;
 	// add runnable zval to fhread object
 	SEPARATE_ZVAL(runnable);
 
