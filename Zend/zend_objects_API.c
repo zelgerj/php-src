@@ -178,6 +178,9 @@ ZEND_API void zend_objects_store_free(zend_object *object) /* {{{ */
 
 ZEND_API void zend_objects_store_del(zend_object *object) /* {{{ */
 {
+
+	printf("zend_objects_store_del handle: %s\n", object->handle);
+
 	/*	Make sure we hold a reference count during the destructor call
 		otherwise, when the destructor ends the storage might be freed
 		when the refcount reaches 0 a second time

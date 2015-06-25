@@ -6,7 +6,7 @@ if (!class_exists('\Thread')) {
 }
 
 class Storage {
-    private $mutex;
+    public $mutex;
     public $data = [];
     
     public function __construct() {
@@ -18,6 +18,22 @@ class Storage {
         $this->data[$key] = $value;
         fhread_mutex_unlock($this->mutex);
     }
+    
+}
+
+class DaemonThread extends Thread
+{
+    public function __construct($data)
+    {
+        $this->data = $data;
+    }
+    public function run()
+    {
+        while(1) {
+            echo '$this->data->watchVar = ' . $this->data->watchVar . PHP_EOL;
+            sleep(1);
+        }
+    }
 }
 
 class TestThread extends Thread
@@ -27,8 +43,29 @@ class TestThread extends Thread
         $this->data = $data;
     }
     
-    public function run() {
+    public function run()
+    {
         $this->data->set($this->getThreadId(), $this->getThreadId());
+        $this->data->watchVar = $this->getThreadId();
+    }
+}
+
+class ChangerThread extends Thread
+{
+    public function __construct($data)
+    {
+         $this->data = $data;
+    }
+    
+    public function run()
+    {
+        while(1) {
+            usleep(10000);
+            fhread_mutex_lock($this->data->mutex);
+            $this->data->watchVar = md5(microtime());
+            fhread_mutex_unlock($this->data->mutex);
+        }
+        
     }
 }
 
@@ -48,5 +85,15 @@ for ($i = 0; $i < $index; $i++) {
 }
 
 var_dump($data);
+
+$c = [];
+for ($i = 0; $i < $index; $i++) {
+    $c[$i] = new ChangerThread($data);
+    $c[$i]->start();
+}
+
+$w = new DaemonThread($data);
+$w->start();
+$w->join();
 
 echo "finished script..." . PHP_EOL . PHP_EOL;

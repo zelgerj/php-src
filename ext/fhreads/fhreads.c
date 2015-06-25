@@ -33,7 +33,6 @@ ZEND_DECLARE_MODULE_GLOBALS(fhreads)
 static zend_object_handlers fhreads_handlers;
 static zend_object_handlers *fhreads_zend_handlers;
 static pthread_mutex_t fhread_global_mutex = PTHREAD_MUTEX_INITIALIZER;
-
 static fhread_objects_store fhread_objects;
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_fhread_create, 0, 0, 1)
@@ -63,13 +62,34 @@ void fhread_object_store_init()
 	// init object store mutex
 	pthread_mutex_init(&fhread_objects.mutex, NULL);
 	// init object_buckets
-	fhread_objects.object_buckets = (fhread_object **) malloc(fhread_objects.size * sizeof(fhread_object*));
+	fhread_objects.object_buckets = (fhread_object **) emalloc(fhread_objects.size * sizeof(fhread_object*));
 	// erase data
 	memset(&fhread_objects.object_buckets[0], 0, sizeof(fhread_object*));
 }
 /* }}} */
 
-/* {{{ Initialises the fhread object store */
+/* {{{ Creates and returns new fhread object */
+void fhread_object_destroy(fhread_object* fhread)
+{
+	/*
+	// realloc hashtables for context to be destroyed savely
+	FHREADS_EG(fhread->tsrm_ls, function_table) = (HashTable *) malloc(sizeof(HashTable));
+	FHREADS_EG(fhread->tsrm_ls, class_table) = (HashTable *) malloc(sizeof(HashTable));
+	FHREADS_EG(fhread->tsrm_ls, zend_constants) = (HashTable *) malloc(sizeof(HashTable));
+	zend_hash_init_ex(FHREADS_EG(fhread->tsrm_ls, function_table), 1, NULL, NULL, 1, 0);
+	zend_hash_init_ex(FHREADS_EG(fhread->tsrm_ls, class_table), 1, NULL, NULL, 1, 0);
+	zend_hash_init_ex(FHREADS_EG(fhread->tsrm_ls, zend_constants), 1, NULL, NULL, 1, 0);
+	// free context
+	tsrm_free_interpreter_context(fhread->tsrm_ls);
+	*/
+	// destroy mutex
+	pthread_mutex_destroy(&fhread->mutex);
+	// finally free object itself
+	efree(fhread);
+}
+/* }}} */
+
+/* {{{ Destroy the fhread object store */
 void fhread_object_store_destroy()
 {
 	fhread_object **obj_ptr, **end, *obj;
@@ -82,7 +102,7 @@ void fhread_object_store_destroy()
 	do {
 		obj_ptr--;
 		obj = *obj_ptr;
-		efree(obj);
+		fhread_object_destroy(obj);
 	} while (obj_ptr != end);
 	// destroy object store mutex
 	pthread_mutex_destroy(&fhread_objects.mutex);
@@ -97,8 +117,10 @@ uint32_t fhread_object_store_put(fhread_object *object)
 {
 	// init vars
 	int handle;
-	// inc stores top
+	// lock store access for thread safty inc stores top
+	pthread_mutex_lock(&fhread_objects.mutex);
 	handle = fhread_objects.top++;
+	pthread_mutex_unlock(&fhread_objects.mutex);
 	// add handle number to object itself
 	object->handle = handle;
 	// add object to store
@@ -109,10 +131,10 @@ uint32_t fhread_object_store_put(fhread_object *object)
 /* }}} */
 
 /* {{{ Creates and returns new fhread object */
-fhread_object* fhread_object_create()
+static fhread_object* fhread_object_create()
 {
 	// prepare fhread
-	fhread_object* fhread = (fhread_object *) malloc(sizeof(fhread_object));
+	fhread_object* fhread = emalloc(sizeof(fhread_object));
 	// init executor flag
 	fhread->is_initialized = 0;
 	// set thread_id
@@ -124,6 +146,7 @@ fhread_object* fhread_object_create()
 	// return inited object
 	return fhread;
 }
+/* }}} */
 
 /* {{{ Initialises the compile in fhreads context */
 void fhread_init_compiler(fhread_object *fhread) /* {{{ */
@@ -136,45 +159,6 @@ void fhread_init_compiler(fhread_object *fhread) /* {{{ */
 /* {{{ Initialises the executor in fhreads context */
 void fhread_init_executor(fhread_object *fhread) /* {{{ */
 {
-	zend_init_fpu();
-
-	ZVAL_NULL(&EG(uninitialized_zval));
-	ZVAL_NULL(&EG(error_zval));
-	// destroys stack frame, therefore makes core dumps worthless
-#if 0&&ZEND_DEBUG
-	original_sigsegv_handler = signal(SIGSEGV, zend_handle_sigsegv);
-#endif
-
-	EG(symtable_cache_ptr) = EG(symtable_cache) - 1;
-	EG(symtable_cache_limit) = EG(symtable_cache) + SYMTABLE_CACHE_SIZE - 1;
-	EG(no_extensions) = 0;
-
-	EG(function_table) = CG(function_table);
-	EG(class_table) = CG(class_table);
-
-	EG(in_autoload) = NULL;
-	EG(autoload_func) = NULL;
-	EG(error_handling) = EH_NORMAL;
-
-	zend_vm_stack_init();
-
-	//zend_hash_init(&EG(symbol_table), 64, NULL, ZVAL_PTR_DTOR, 0);
-	EG(symbol_table) = FHREADS_EG(fhread->c_tsrm_ls, symbol_table);
-	EG(valid_symbol_table) = 1;
-
-	//zend_llist_apply(&zend_extensions, (llist_apply_func_t) zend_extension_activator);
-	//zend_hash_init(&EG(included_files), 8, NULL, NULL, 0);
-
-	EG(ticks_count) = 0;
-
-	ZVAL_UNDEF(&EG(user_error_handler));
-
-	EG(current_execute_data) = NULL;
-
-	zend_stack_init(&EG(user_error_handlers_error_reporting), sizeof(int));
-	zend_stack_init(&EG(user_error_handlers), sizeof(zval));
-	zend_stack_init(&EG(user_exception_handlers), sizeof(zval));
-
 	// link included files
 	EG(included_files) = FHREADS_EG(fhread->c_tsrm_ls, included_files);
 	// link functions
@@ -187,8 +171,36 @@ void fhread_init_executor(fhread_object *fhread) /* {{{ */
 	EG(regular_list) = FHREADS_EG(fhread->c_tsrm_ls, regular_list);
 	// link objects_store
 	EG(objects_store) = FHREADS_EG(fhread->c_tsrm_ls, objects_store);
+	// link symbol table
+	EG(symbol_table) = FHREADS_EG(fhread->c_tsrm_ls, symbol_table);
 
+	zend_init_fpu();
 
+	ZVAL_NULL(&EG(uninitialized_zval));
+	ZVAL_NULL(&EG(error_zval));
+	// destroys stack frame, therefore makes core dumps worthless
+#if 0&&ZEND_DEBUG
+	original_sigsegv_handler = signal(SIGSEGV, zend_handle_sigsegv);
+#endif
+	EG(symtable_cache_ptr) = EG(symtable_cache) - 1;
+	EG(symtable_cache_limit) = EG(symtable_cache) + SYMTABLE_CACHE_SIZE - 1;
+	EG(no_extensions) = 0;
+	EG(in_autoload) = NULL;
+	EG(autoload_func) = NULL;
+	EG(error_handling) = EH_NORMAL;
+
+	zend_vm_stack_init();
+
+	EG(valid_symbol_table) = 1;
+	EG(ticks_count) = 0;
+
+	ZVAL_UNDEF(&EG(user_error_handler));
+
+	EG(current_execute_data) = NULL;
+
+	zend_stack_init(&EG(user_error_handlers_error_reporting), sizeof(int));
+	zend_stack_init(&EG(user_error_handlers), sizeof(zval));
+	zend_stack_init(&EG(user_exception_handlers), sizeof(zval));
 
 	EG(full_tables_cleanup) = 0;
 	#ifdef ZEND_WIN32
@@ -239,12 +251,21 @@ void fhread_init(fhread_object* fhread)
 /* {{{ Run the runnable zval in fhread context */
 void fhread_run(fhread_object* fhread)
 {
+	zval runnable;
+	zend_object* obj;
+
 	// init fhread before run it
 	fhread_init(fhread);
 
+	obj = EG(objects_store).object_buckets[fhread->runnable_handle];
+	ZVAL_OBJ(&runnable, obj);
+	Z_ADDREF(runnable);
+
 	// call run method
 	// todo: check if interface runnable was implemented...
-	zend_call_method_with_0_params(fhread->runnable, Z_OBJCE_P(fhread->runnable), NULL, "run", NULL);
+	zval rv;
+	zend_call_method_with_0_params(&runnable, obj->ce, NULL, "run", &rv);
+
 }
 
 /* {{{ The routine to call for pthread_create */
@@ -342,16 +363,22 @@ PHP_FUNCTION(fhread_create)
 	if (zend_parse_parameters(ZEND_NUM_ARGS(), "o|z/", &runnable, &thread_id) == FAILURE)
 		return;
 
+
+	Z_ADDREF_P(runnable);
+
 	// todo: check if free fhread object is available an reuse it...
 	fhread_object* fhread = fhread_object_create();
-	// add new object
+	// add new object and save handle
 	uint32_t fhreads_object_handle = fhread_object_store_put(fhread);
+	// save runnable handle from zval
+	fhread->runnable_handle = Z_OBJ_HANDLE_P(runnable);
 
 	// inject fhread handlers for runnable zval
-	Z_OBJ_HT_P(runnable) = &fhreads_handlers;
+	// Z_OBJ_HT_P(runnable) = &fhreads_handlers;
 	// add runnable zval to fhread object
-	Z_ADDREF_P(runnable);
-	fhread->runnable = runnable;
+	// Z_ADDREF_P(runnable);
+	// fhread->runnable = runnable;
+	// ZVAL_COPY(fhread->runnable, runnable);
 
 	// lock fhread mutex to wait for everything being ready
 	pthread_mutex_lock(&fhread->mutex);
