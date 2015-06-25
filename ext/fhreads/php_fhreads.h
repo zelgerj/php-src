@@ -24,7 +24,7 @@
 extern zend_module_entry fhreads_module_entry;
 #define phpext_fhreads_ptr &fhreads_module_entry
 
-#define PHP_FHREADS_VERSION "0.1.1"
+#define PHP_FHREADS_VERSION "0.1.2"
 
 #ifdef PHP_WIN32
 #	define PHP_FHREADS_API __declspec(dllexport)
@@ -91,10 +91,8 @@ typedef struct _fhread_objects_store {
 	uint32_t top;
 	uint32_t size;
 	int free_list_head;
+	pthread_mutex_t mutex;
 } fhread_objects_store;
-
-void fhread_init_executor(fhread_object *fhread TSRMLS_DC);
-void fhreads_sync_objects_store_buckets();
 
 /* {{{ TSRM manipulation */
 #define FHREADS_FETCH_ALL(ls, id, type) ((type) (*((void ***) ls))[TSRM_UNSHUFFLE_RSRC_ID(id)])

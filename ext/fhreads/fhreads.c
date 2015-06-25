@@ -34,7 +34,7 @@ static zend_object_handlers fhreads_handlers;
 static zend_object_handlers *fhreads_zend_handlers;
 static pthread_mutex_t fhread_global_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-static fhread_objects_store fhreads;
+static fhread_objects_store fhread_objects;
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_fhread_create, 0, 0, 1)
 	ZEND_ARG_INFO(0, runnable)
@@ -55,15 +55,40 @@ PHP_INI_END()
 void fhread_object_store_init()
 {
 	// init size
-	fhreads.size = 1024;
+	fhread_objects.size = 1024 * 4;
 	// init top
-	fhreads.top = 1;
+	fhread_objects.top = 1;
 	// init free_list_head
-	fhreads.free_list_head = -1;
+	fhread_objects.free_list_head = -1;
+	// init object store mutex
+	pthread_mutex_init(&fhread_objects.mutex, NULL);
 	// init object_buckets
-	fhreads.object_buckets = (fhread_object **) malloc(fhreads.size * sizeof(fhread_object*));
+	fhread_objects.object_buckets = (fhread_object **) malloc(fhread_objects.size * sizeof(fhread_object*));
 	// erase data
-	memset(&fhreads.object_buckets[0], 0, sizeof(fhread_object*));
+	memset(&fhread_objects.object_buckets[0], 0, sizeof(fhread_object*));
+}
+/* }}} */
+
+/* {{{ Initialises the fhread object store */
+void fhread_object_store_destroy()
+{
+	fhread_object **obj_ptr, **end, *obj;
+	if (fhread_objects.top <= 1) {
+		return;
+	}
+	// free all objects
+	end = fhread_objects.object_buckets + 1;
+	obj_ptr = fhread_objects.object_buckets + fhread_objects.top;
+	do {
+		obj_ptr--;
+		obj = *obj_ptr;
+		efree(obj);
+	} while (obj_ptr != end);
+	// destroy object store mutex
+	pthread_mutex_destroy(&fhread_objects.mutex);
+	// free object buckets
+	efree(fhread_objects.object_buckets);
+	fhread_objects.object_buckets = NULL;
 }
 /* }}} */
 
@@ -73,11 +98,11 @@ uint32_t fhread_object_store_put(fhread_object *object)
 	// init vars
 	int handle;
 	// inc stores top
-	handle = fhreads.top++;
+	handle = fhread_objects.top++;
 	// add handle number to object itself
 	object->handle = handle;
 	// add object to store
-	fhreads.object_buckets[handle] = object;
+	fhread_objects.object_buckets[handle] = object;
 	// return handle
 	return handle;
 }
@@ -99,13 +124,6 @@ fhread_object* fhread_object_create()
 	// return inited object
 	return fhread;
 }
-
-/* {{{ */
-void fhreads_global_free(fhread_object *fhread)
-{
-	printf("fhreads_global_free\n");
-	// efree(&fhread);
-} /* }}} */
 
 /* {{{ Initialises the compile in fhreads context */
 void fhread_init_compiler(fhread_object *fhread) /* {{{ */
@@ -233,7 +251,7 @@ void fhread_run(fhread_object* fhread)
 void *fhread_routine (void* ptr)
 {
 	// run fhread
-	fhread_run(fhreads.object_buckets[*((uint32_t*)ptr)]);
+	fhread_run(fhread_objects.object_buckets[*((uint32_t*)ptr)]);
 	// exit thread
 	pthread_exit(NULL);
 
@@ -377,9 +395,6 @@ PHP_FUNCTION(fhread_join)
  */
 PHP_MINIT_FUNCTION(fhreads)
 {
-	// fhread_global_tsrm_ls = TSRMLS_C;
-	fhread_object_store_init();
-
 	// init module globals
 	ZEND_INIT_MODULE_GLOBALS(fhreads, NULL, NULL);
 
@@ -406,6 +421,7 @@ PHP_MSHUTDOWN_FUNCTION(fhreads)
 	/* uncomment this line if you have INI entries
 	UNREGISTER_INI_ENTRIES();
 	*/
+
 	return SUCCESS;
 } /* }}} */
 
@@ -414,16 +430,17 @@ PHP_MSHUTDOWN_FUNCTION(fhreads)
  */
 PHP_RINIT_FUNCTION(fhreads)
 {
-	/*
-	// recalc object store size
-	uint32_t new_objects_store_size = EG(objects_store).size * 1024;
+	// init fhread objects store
+	fhread_object_store_init();
 
+	// recalc object store size that reallocation does not get trigged
+	uint32_t new_objects_store_size = EG(objects_store).size * 4096;
 	// reallocate objects store at beginning
 	if (EG(objects_store).size != new_objects_store_size) {
 		EG(objects_store).size = new_objects_store_size;
 		EG(objects_store).object_buckets = (zend_object **) erealloc(EG(objects_store).object_buckets, EG(objects_store).size * sizeof(zend_object*));
 	}
-	 */
+
 	return SUCCESS;
 } /* }}} */
 
@@ -432,6 +449,9 @@ PHP_RINIT_FUNCTION(fhreads)
  */
 PHP_RSHUTDOWN_FUNCTION(fhreads)
 {
+	// destroy fhreads object store
+	fhread_object_store_destroy();
+
 	return SUCCESS;
 } /* }}} */
 
