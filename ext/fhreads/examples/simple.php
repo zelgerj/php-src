@@ -41,7 +41,7 @@ for ($i = 0; $i < $index; $i++) {
     $t[$i] = new TestThread($data);
 }
 for ($i = 0; $i < $index; $i++) {
-    $t[$i]->start();
+    var_dump($t[$i]->start());
 }
 for ($i = 0; $i < $index; $i++) {
     $t[$i]->join();

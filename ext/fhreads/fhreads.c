@@ -30,10 +30,8 @@
 ZEND_DECLARE_MODULE_GLOBALS(fhreads)
 
 /* True global resources - no need for thread safety here */
-static void ***fhread_global_tsrm_ls;
 static zend_object_handlers fhreads_handlers;
 static zend_object_handlers *fhreads_zend_handlers;
-static HashTable fhreads_objects;
 static pthread_mutex_t fhread_global_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static fhread_objects_store fhreads;
@@ -232,12 +230,10 @@ void fhread_run(fhread_object* fhread)
 }
 
 /* {{{ The routine to call for pthread_create */
-void *fhread_routine (void *fobj)
+void *fhread_routine (void* ptr)
 {
-	// cast back to fhread_object
-	fhread_object* fhread = (fhread_object *) fobj;
 	// run fhread
-	fhread_run(fhread);
+	fhread_run(fhreads.object_buckets[*((uint32_t*)ptr)]);
 	// exit thread
 	pthread_exit(NULL);
 
@@ -343,7 +339,7 @@ PHP_FUNCTION(fhread_create)
 	pthread_mutex_lock(&fhread->mutex);
 
 	// create thread and start fhread__routine
-	int pthread_status = pthread_create(&fhread->thread_id, NULL, fhread_routine, fhread);
+	int pthread_status = pthread_create(&fhread->thread_id, NULL, fhread_routine, &fhreads_object_handle);
 
 	// check if second param was given for thread id reference
 	if (thread_id) {
