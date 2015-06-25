@@ -224,9 +224,9 @@ abstract class Thread implements Runnable
     {
         // check if thread is between joined and started state to join it automatically
         // if php process is going to shutdown
-        // if (($this->getState() > self::STATE_STARTED) && $this->getState() < self::STATE_JOINED) {
-        //     $this->join();
-        // }
+        if (($this->getState() > self::STATE_STARTED) && $this->getState() < self::STATE_JOINED) {
+            $this->join();
+        }
         // in every other case do nothing
     }
 

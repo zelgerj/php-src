@@ -7,21 +7,17 @@ if (!class_exists('\Thread')) {
 class TestThread extends \Thread
 {
     public function run() {
-        echo $this->getThreadId() . "\n";
-        /*
         while(1) {
             $i = 0;
             while(++$i < 100) {
                 $this->objects[$i] = new \stdClass();
-                usleep(100);
+                //usleep(1);
             }
         }
-        */
-        return $this;
     }
 }
 
-$tMax = 1000;
+$tMax = 100;
 $t = array();
 
 for ($i = 0; $i < $tMax; $i++) {
@@ -32,12 +28,8 @@ for ($i = 0; $i < $tMax; $i++) {
     $t[$i]->start();
 }
 
-/*
 for ($i = 0; $i < $tMax; $i++) {
     $t[$i]->join();
 }
-*/
-
-sleep(1);
 
 echo "finished script...\n";
