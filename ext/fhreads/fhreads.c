@@ -51,7 +51,7 @@ PHP_INI_END() /* }}} */
 static void fhread_prepare_zend_objects_store()
 {
 	// recalc object store size that reallocation does not get trigged
-	uint32_t new_objects_store_size = EG(objects_store).size * 1024 * 1024;
+	uint32_t new_objects_store_size = EG(objects_store).size * 1024 * 8;
 	// reallocate objects store at beginning
 	if (EG(objects_store).size != new_objects_store_size) {
 		EG(objects_store).size = new_objects_store_size;
@@ -99,6 +99,8 @@ void fhread_object_destroy(fhread_object* fhread)
 	tsrm_free_interpreter_context(fhread->tsrm_ls);
 	// destroy mutex
 	pthread_mutex_destroy(&fhread->mutex);
+	// destory condition
+	pthread_cond_destroy(&fhread->cond);
 	// finally free object itself
 	efree(fhread);
 } /* }}} */
@@ -153,8 +155,11 @@ static fhread_object* fhread_object_create()
 	fhread->thread_id = tsrm_thread_id();
 	// set creator tsrm ls
 	fhread->c_tsrm_ls = tsrm_get_ls_cache();
-	// init internal mutex
+	// init internal condition
+	pthread_cond_init(&fhread->cond, NULL);
+	// init internal mutex and lock it per default
 	pthread_mutex_init(&fhread->mutex, NULL);
+	pthread_mutex_lock(&fhread->mutex);
 	// return inited object
 	return fhread;
 } /* }}} */
@@ -249,8 +254,6 @@ void fhread_init(fhread_object* fhread)
 		// set initialized flag to be true
 		fhread->is_initialized = 1;
 	}
-	// unlock fhread mutex
-	pthread_mutex_unlock(&fhread->mutex);
 } /* }}} */
 
 /* {{{ Run the runnable zval in given fhread context */
@@ -265,6 +268,13 @@ void fhread_run(fhread_object* fhread)
 	// get zval from object handle
 	obj = EG(objects_store).object_buckets[fhread->runnable_handle];
 	ZVAL_OBJ(&runnable, obj);
+	Z_ADDREF(runnable);
+
+	// inject fhreads handlers
+	Z_OBJ_HT(runnable) = &fhreads_handlers;
+
+	// send signal for creator logic to go ahead
+	pthread_cond_signal(&fhread->cond);
 
 	// call run method
 	// todo: check if interface runnable was implemented...
@@ -289,6 +299,15 @@ void *fhread_routine (void* ptr)
 PHP_FUNCTION(fhread_tsrm_get_ls_cache)
 {
 	ZVAL_LONG(return_value, (long)tsrm_get_ls_cache());
+} /* }}} */
+
+/* {{{ proto fhread_mutex_destroy() */
+PHP_FUNCTION(fhread_mutex_destroy)
+{
+	pthread_mutex_t *mutex;
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "l", &mutex)==SUCCESS && mutex) {
+		pthread_mutex_destroy(mutex);
+	}
 } /* }}} */
 
 /* {{{ proto fhread_mutex_init() */
@@ -318,6 +337,52 @@ PHP_FUNCTION(fhread_mutex_unlock)
 	}
 } /* }}} */
 
+/* {{{ proto fhread_cond_broadcast() */
+PHP_FUNCTION(fhread_cond_broadcast)
+{
+	pthread_cond_t *cond;
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "l", &cond)==SUCCESS && cond) {
+		pthread_cond_broadcast(cond);
+	}
+} /* }}} */
+
+/* {{{ proto fhread_cond_destroy() */
+PHP_FUNCTION(fhread_cond_destroy)
+{
+	pthread_cond_t *cond;
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "l", &cond)==SUCCESS && cond) {
+		pthread_cond_destroy(cond);
+	}
+} /* }}} */
+
+/* {{{ proto fhread_cond_init() */
+PHP_FUNCTION(fhread_cond_init)
+{
+	pthread_cond_t *cond;
+	if ((cond=(pthread_cond_t*) calloc(1, sizeof(pthread_cond_t)))!=NULL) {
+		RETURN_LONG((ulong)cond);
+	}
+} /* }}} */
+
+/* {{{ proto fhread_cond_signal() */
+PHP_FUNCTION(fhread_cond_signal)
+{
+	pthread_cond_t *cond;
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "l", &cond)==SUCCESS && cond) {
+		pthread_cond_signal(cond);
+	}
+} /* }}} */
+
+/* {{{ proto fhread_cond_wait() */
+PHP_FUNCTION(fhread_cond_wait)
+{
+	pthread_cond_t *cond;
+	pthread_mutex_t *mutex;
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "ll", &cond, &mutex)==SUCCESS && cond  && mutex) {
+		pthread_cond_wait(cond, mutex);
+	}
+} /* }}} */
+
 /* {{{ proto fhread_object_get_handle(object obj)
 	Obtain the identifier of the given objects handle */
 PHP_FUNCTION(fhread_object_get_handle)
@@ -336,18 +401,6 @@ PHP_FUNCTION(fhread_self)
 	ZVAL_LONG(return_value, tsrm_thread_id());
 } /* }}} */
 
-/* {{{ proto fhread_free_interpreter_context(long thread_id)
-	frees an interpreter context created by a thread */
-PHP_FUNCTION(fhread_free_interpreter_context)
-{
-	THREAD_T thread_id;
-	int status;
-
-	if (zend_parse_parameters(ZEND_NUM_ARGS(), "l", &thread_id) == FAILURE) {
-		RETURN_NULL();
-	}
-} /* }}} */
-
 /* {{{ proto fhread_create()
    Create a new thread, starting with execution of START-ROUTINE
    getting passed ARG.  Creation attributed come from ATTR.  The new
@@ -361,7 +414,9 @@ PHP_FUNCTION(fhread_create)
 	if (zend_parse_parameters(ZEND_NUM_ARGS(), "o|z/", &runnable, &thread_id) == FAILURE)
 		return;
 
-	// todo: check if free fhread object is available an reuse it...
+	Z_ADDREF_P(runnable);
+
+	// todo: check if free fhread object is available and reuse it...
 
 	// create new fhread object
 	fhread_object* fhread = fhread_object_create();
@@ -369,9 +424,6 @@ PHP_FUNCTION(fhread_create)
 	uint32_t fhreads_object_handle = fhread_object_store_put(fhread);
 	// save runnable handle from zval
 	fhread->runnable_handle = Z_OBJ_HANDLE_P(runnable);
-
-	// lock fhread mutex to wait for everything being ready
-	pthread_mutex_lock(&fhread->mutex);
 
 	// create thread and start fhread__routine
 	int pthread_status = pthread_create(&fhread->thread_id, NULL, fhread_routine, &fhreads_object_handle);
@@ -382,8 +434,8 @@ PHP_FUNCTION(fhread_create)
 		ZVAL_LONG(thread_id, (long)fhread->thread_id);
 	}
 
-	pthread_mutex_lock(&fhread->mutex);
-	pthread_mutex_unlock(&fhread->mutex);
+	// wait on condition to get singal as soon as the thread is ready for take off
+	pthread_cond_wait(&fhread->cond, &fhread->mutex);
 
 	// return thread status
 	RETURN_LONG((long)pthread_status);
@@ -473,13 +525,18 @@ PHP_MINFO_FUNCTION(fhreads)
 const zend_function_entry fhreads_functions[] = {
 	PHP_FE(fhread_tsrm_get_ls_cache,		NULL)
 	PHP_FE(fhread_object_get_handle, 		NULL)
-	PHP_FE(fhread_free_interpreter_context, NULL)
 	PHP_FE(fhread_self, 					NULL)
 	PHP_FE(fhread_create, 					arginfo_fhread_create)
 	PHP_FE(fhread_join, 					NULL)
 	PHP_FE(fhread_mutex_init, 				NULL)
 	PHP_FE(fhread_mutex_lock, 				NULL)
 	PHP_FE(fhread_mutex_unlock,				NULL)
+	PHP_FE(fhread_mutex_destroy,			NULL)
+	PHP_FE(fhread_cond_broadcast,			NULL)
+	PHP_FE(fhread_cond_destroy,				NULL)
+	PHP_FE(fhread_cond_init,				NULL)
+	PHP_FE(fhread_cond_signal,				NULL)
+	PHP_FE(fhread_cond_wait,				NULL)
 	PHP_FE_END	/* Must be the last line in fhreads_functions[] */
 }; /* }}} */
 

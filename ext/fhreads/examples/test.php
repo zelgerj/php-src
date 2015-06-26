@@ -1,41 +1,36 @@
 <?php
 
+define('strict_types', 1);
+
 // to be compatible with pthreads lib
 if (!class_exists('\Thread')) {
     require_once __DIR__ . DIRECTORY_SEPARATOR . "Thread.php";
 }
 
 
-
-class TestThread extends \Thread
+class TestThread extends Thread
 {
-
-    public function __construct($data)
+    public $mutex;
+    public function __construct(int $a)
     {
-        $this->data = $data;
+        $this->mutex = fhread_mutex_init();
     }
-
+    
     public function run()
     {
-        $this->data->initial = 2;
-        $this->data->thread = $this->getThreadId();
-        $this->data->threadInstance = $this;
-
-
-        var_dump($this->data->resource);
-
-        $this->data->closure->__invoke();
+        fhread_mutex_lock($this->mutex);
+        $this->a += 10;
+        fhread_mutex_unlock($this->mutex);
     }
 }
 
-
-$data = new \stdClass();
-$data->initial = 1;
-$data->resource = simplexml_load_string('<xml></xml>');
-$data->closure = function() {
-    echo 'hallo' . PHP_EOL;
-};
-
-$t = new TestThread($data);
+$t = new TestThread("1");
 $t->start();
 $t->join();
+
+var_dump($t);
+
+fhread_mutex_lock($t->mutex);
+echo "finished script..." . PHP_EOL;
+
+fhread_mutex_unlock($t->mutex);

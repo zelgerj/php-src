@@ -46,7 +46,7 @@ class TestThread extends Thread
     public function run()
     {
         $this->data->set($this->getThreadId(), $this->getThreadId());
-        $this->data->watchVar = $this->getThreadId();
+        $this->data->watchVar = 2;
     }
 }
 
@@ -62,7 +62,7 @@ class ChangerThread extends Thread
         while(1) {
             usleep(10000);
             fhread_mutex_lock($this->data->mutex);
-            $this->data->watchVar = md5(microtime());
+            $this->data->watchVar++;
             fhread_mutex_unlock($this->data->mutex);
         }
         

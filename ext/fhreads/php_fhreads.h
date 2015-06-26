@@ -74,6 +74,7 @@ extern zend_module_entry fhreads_module_entry;
 typedef struct _fhread_object {
 	pthread_t thread_id;
 	pthread_mutex_t mutex;
+	pthread_cond_t cond;
 	void ***c_tsrm_ls;
 	void ***tsrm_ls;
 	uint32_t handle;

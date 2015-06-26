@@ -64,11 +64,21 @@ abstract class Thread implements Runnable
     protected $id = null;
 
     /**
-     * Holds thread mutex pointer
+     * Holds thread mutex pointers
      *
      * @var int
      */
     protected $mutex = null;
+    protected $stateMutex = null;
+    protected $syncMutex = null;
+    
+    /**
+     * Holds thread condition pointer
+     * 
+     * @var int
+     */
+    protected $cond = null;
+    protected $syncCond = null;
 
     /**
      * Holds thread state flag
@@ -96,8 +106,13 @@ abstract class Thread implements Runnable
             throw new \Exception('Thread has been started already!');
         }
         $this->setState(self::STATE_STARTED);
+        // init thread cond
+        $this->cond = fhread_cond_init();
+        $this->stateCond = fhread_cond_init();
         // init thread mutex
         $this->mutex = fhread_mutex_init();
+        $this->stateMutex = fhread_mutex_init();
+        $this->syncMutex = fhread_mutex_init();
         // create, start thread and save thread id
         if (fhread_create($this, $this->id) === 0) {
             $this->setState(self::STATE_RUNNING);
@@ -149,6 +164,38 @@ abstract class Thread implements Runnable
         fhread_join($this->getThreadId());
         $this->setState(self::STATE_JOINED);
     }
+    
+    /**
+     * Returns wheater the thread is in waiting state or not
+     * 
+     * @return bool
+     */
+    public function isWaiting()
+    {
+        return $this->getState() === self::STATE_WAITING;
+    }
+    
+    /**
+     * Waits for the state codition gets a signal
+     * 
+     * @return void
+     */
+    public function wait()
+    {
+        $this->setState(self::STATE_WAITING);
+        fhread_cond_wait($this->syncCond, $this->syncMutex);
+    }
+    
+    /**
+     * Notifiy the state cond for waiters to stop waiting
+     * 
+     * @return void
+     */
+    public function notify()
+    {
+        fhread_cond_signal($this->syncCond);
+        $this->setState(STATE_RUNNING);
+    }
 
     /**
      * Locks thread object's mutex
@@ -181,9 +228,9 @@ abstract class Thread implements Runnable
      */
     public function synchronized(\Closure $sync)
     {
-        $this->lock();
+        fhread_mutex_lock($this->syncMutex);
         $sync($this);
-        $this->unlock();
+        fhread_mutex_unlock($this->syncMutex);
     }
 
     /**
