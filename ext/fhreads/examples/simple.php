@@ -100,4 +100,6 @@ $w->join();
 
 var_dump($t);
 
+var_dump(fhread_tsrm_get_ls_cache());
+
 echo "finished script..." . PHP_EOL . PHP_EOL;

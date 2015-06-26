@@ -9,9 +9,9 @@ class TestThread extends \Thread
     public function run() {
         while(1) {
             $i = 0;
+            $this->objects = array();
             while(++$i < 100) {
                 $this->objects[$i] = new \stdClass();
-                //usleep(1);
             }
         }
     }
