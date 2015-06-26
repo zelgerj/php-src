@@ -86,6 +86,7 @@ for ($i = 0; $i < $index; $i++) {
 
 var_dump($data);
 
+/*
 $c = [];
 for ($i = 0; $i < $index; $i++) {
     $c[$i] = new ChangerThread($data);
@@ -95,5 +96,8 @@ for ($i = 0; $i < $index; $i++) {
 $w = new DaemonThread($data);
 $w->start();
 $w->join();
+*/
+
+var_dump($t);
 
 echo "finished script..." . PHP_EOL . PHP_EOL;

@@ -257,9 +257,9 @@ void fhread_run(fhread_object* fhread)
 	// init fhread before run it
 	fhread_init(fhread);
 
+	// get zval from object handle
 	obj = EG(objects_store).object_buckets[fhread->runnable_handle];
 	ZVAL_OBJ(&runnable, obj);
-	Z_ADDREF(runnable);
 
 	// call run method
 	// todo: check if interface runnable was implemented...
@@ -363,22 +363,14 @@ PHP_FUNCTION(fhread_create)
 	if (zend_parse_parameters(ZEND_NUM_ARGS(), "o|z/", &runnable, &thread_id) == FAILURE)
 		return;
 
-
-	Z_ADDREF_P(runnable);
-
 	// todo: check if free fhread object is available an reuse it...
+
+	// create new fhread object
 	fhread_object* fhread = fhread_object_create();
 	// add new object and save handle
 	uint32_t fhreads_object_handle = fhread_object_store_put(fhread);
 	// save runnable handle from zval
 	fhread->runnable_handle = Z_OBJ_HANDLE_P(runnable);
-
-	// inject fhread handlers for runnable zval
-	// Z_OBJ_HT_P(runnable) = &fhreads_handlers;
-	// add runnable zval to fhread object
-	// Z_ADDREF_P(runnable);
-	// fhread->runnable = runnable;
-	// ZVAL_COPY(fhread->runnable, runnable);
 
 	// lock fhread mutex to wait for everything being ready
 	pthread_mutex_lock(&fhread->mutex);
