@@ -31,7 +31,7 @@ class DaemonThread extends Thread
     {
         while(1) {
             echo '$this->data->watchVar = ' . $this->data->watchVar . PHP_EOL;
-            sleep(1);
+            usleep(100);
         }
     }
 }
@@ -86,7 +86,6 @@ for ($i = 0; $i < $index; $i++) {
 
 var_dump($data);
 
-/*
 $c = [];
 for ($i = 0; $i < $index; $i++) {
     $c[$i] = new ChangerThread($data);
@@ -96,7 +95,6 @@ for ($i = 0; $i < $index; $i++) {
 $w = new DaemonThread($data);
 $w->start();
 $w->join();
-*/
 
 var_dump($t);
 

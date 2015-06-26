@@ -29,31 +29,29 @@
 
 ZEND_DECLARE_MODULE_GLOBALS(fhreads)
 
+ZEND_BEGIN_MODULE_GLOBALS(fhreads)
+	HashTable global_value;
+ZEND_END_MODULE_GLOBALS(fhreads)
+
 /* True global resources - no need for thread safety here */
 static zend_object_handlers fhreads_handlers, *fhreads_zend_handlers;
 static fhread_objects_store fhread_objects;
-static pthread_mutex_t fhread_global_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_fhread_create, 0, 0, 1)
 	ZEND_ARG_INFO(0, runnable)
 	ZEND_ARG_INFO(1, thread_id)
 ZEND_END_ARG_INFO()
 
-/* {{{ PHP_INI
- */
-/* Remove comments and fill if you need to have entries in php.ini
+/* {{{ PHP_INI */
 PHP_INI_BEGIN()
-    STD_PHP_INI_ENTRY("fhreads.global_value",      "42", PHP_INI_ALL, OnUpdateLong, global_value, zend_fhreads_globals, fhreads_globals)
-    STD_PHP_INI_ENTRY("fhreads.global_string", "foobar", PHP_INI_ALL, OnUpdateString, global_string, zend_fhreads_globals, fhreads_globals)
-PHP_INI_END()
-*/
-/* }}} */
+    STD_PHP_INI_ENTRY("fhreads.global_value", "42", PHP_INI_ALL, OnUpdateLong, global_value, zend_fhreads_globals, fhreads_globals)
+PHP_INI_END() /* }}} */
 
 /* {{{ Prepares zend objects store for threaded environment */
 static void fhread_prepare_zend_objects_store()
 {
 	// recalc object store size that reallocation does not get trigged
-	uint32_t new_objects_store_size = EG(objects_store).size * 4096;
+	uint32_t new_objects_store_size = EG(objects_store).size * 1024 * 1024;
 	// reallocate objects store at beginning
 	if (EG(objects_store).size != new_objects_store_size) {
 		EG(objects_store).size = new_objects_store_size;
@@ -181,6 +179,8 @@ void fhread_init_executor(fhread_object *fhread) /* {{{ */
 	EG(zend_constants) = FHREADS_EG(fhread->c_tsrm_ls, zend_constants);
 	// link regular list
 	EG(regular_list) = FHREADS_EG(fhread->c_tsrm_ls, regular_list);
+	// link regular list
+	EG(persistent_list) = FHREADS_EG(fhread->c_tsrm_ls, persistent_list);
 	// link objects_store
 	EG(objects_store) = FHREADS_EG(fhread->c_tsrm_ls, objects_store);
 	// link symbol table
@@ -236,8 +236,6 @@ void fhread_init(fhread_object* fhread)
 {
 	// check if initialization is needed
 	if (fhread->is_initialized != 1) {
-		// lock global mutex for context initalisation
-		//pthread_mutex_lock(&fhread_global_mutex);
 		// create new interpreter context
 		void ***tsrm_ls = fhread->tsrm_ls = tsrm_new_interpreter_context();
 		// set prepared thread ls
@@ -250,8 +248,6 @@ void fhread_init(fhread_object* fhread)
 		fhread_init_executor(fhread);
 		// set initialized flag to be true
 		fhread->is_initialized = 1;
-		// unlock global mutex
-		//pthread_mutex_unlock(&fhread_global_mutex);
 	}
 	// unlock fhread mutex
 	pthread_mutex_unlock(&fhread->mutex);
@@ -260,7 +256,7 @@ void fhread_init(fhread_object* fhread)
 /* {{{ Run the runnable zval in given fhread context */
 void fhread_run(fhread_object* fhread)
 {
-	zval runnable;
+	zval runnable, ret_val;
 	zend_object* obj;
 
 	// init fhread before run it
@@ -272,8 +268,7 @@ void fhread_run(fhread_object* fhread)
 
 	// call run method
 	// todo: check if interface runnable was implemented...
-	zval rv;
-	zend_call_method_with_0_params(&runnable, obj->ce, NULL, "run", &rv);
+	zend_call_method_with_0_params(&runnable, obj->ce, NULL, "run", &ret_val);
 } /* }}} */
 
 /* {{{ The routine to call for pthread_create */
@@ -421,12 +416,11 @@ PHP_MINIT_FUNCTION(fhreads)
 	// init module globals
 	ZEND_INIT_MODULE_GLOBALS(fhreads, NULL, NULL);
 
+	// register ini entries
+	REGISTER_INI_ENTRIES();
+
 	// init fhread object handlers
 	fhread_init_object_handlers();
-
-	/* If you have INI entries, uncomment these lines 
-	REGISTER_INI_ENTRIES();
-	*/
 
 	return SUCCESS;
 } /* }}} */
@@ -434,9 +428,7 @@ PHP_MINIT_FUNCTION(fhreads)
 /* {{{ PHP_MSHUTDOWN_FUNCTION */
 PHP_MSHUTDOWN_FUNCTION(fhreads)
 {
-	/* uncomment this line if you have INI entries
 	UNREGISTER_INI_ENTRIES();
-	*/
 
 	return SUCCESS;
 } /* }}} */
@@ -472,9 +464,7 @@ PHP_MINFO_FUNCTION(fhreads)
 	php_info_print_table_row(2, "fhreads version", PHP_FHREADS_VERSION);
 	php_info_print_table_end();
 
-	/* Remove comments if you have entries in php.ini
 	DISPLAY_INI_ENTRIES();
-	*/
 } /* }}} */
 
 /* {{{ fhreads_functions[]

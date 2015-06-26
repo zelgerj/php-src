@@ -71,10 +71,6 @@ extern zend_module_entry fhreads_module_entry;
 #include "TSRM.h"
 #endif
 
-ZEND_BEGIN_MODULE_GLOBALS(fhreads)
-	HashTable fhreads;
-ZEND_END_MODULE_GLOBALS(fhreads)
-
 typedef struct _fhread_object {
 	pthread_t thread_id;
 	pthread_mutex_t mutex;
