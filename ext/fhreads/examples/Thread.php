@@ -99,8 +99,7 @@ abstract class Thread implements Runnable
         // init thread mutex
         $this->mutex = fhread_mutex_init();
         // create, start thread and save thread id
-        $status = fhread_create($this, $this->id);
-        if ($status === 0) {
+        if (fhread_create($this, $this->id) === 0) {
             $this->setState(self::STATE_RUNNING);
             return true;
         }
