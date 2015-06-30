@@ -61,7 +61,8 @@ abstract class Thread implements Runnable
      *
      * @var int
      */
-    protected $id = null;
+    protected $threadId = null;
+    protected $fhreadHandle = null;
 
     /**
      * Holds thread mutex pointers
@@ -77,8 +78,7 @@ abstract class Thread implements Runnable
      * 
      * @var int
      */
-    protected $cond = null;
-    protected $syncCond = null;
+    protected $syncNotify = null;
 
     /**
      * Holds thread state flag
@@ -107,14 +107,13 @@ abstract class Thread implements Runnable
         }
         $this->setState(self::STATE_STARTED);
         // init thread cond
-        $this->cond = fhread_cond_init();
-        $this->stateCond = fhread_cond_init();
+        $this->syncNotify = fhread_cond_init();
         // init thread mutex
         $this->mutex = fhread_mutex_init();
         $this->stateMutex = fhread_mutex_init();
         $this->syncMutex = fhread_mutex_init();
         // create, start thread and save thread id
-        if (fhread_create($this, $this->id) === 0) {
+        if (fhread_create($this, $this->threadId, $this->fhreadHandle) === 0) {
             $this->setState(self::STATE_RUNNING);
             return true;
         }
@@ -127,10 +126,11 @@ abstract class Thread implements Runnable
      *
      * @return int
      */
-    public function getState() {
-        $this->lock();
+    public function getState()
+    {
+        fhread_mutex_lock($this->stateMutex);
         $state = $this->state;
-        $this->unlock();
+        fhread_mutex_unlock($this->stateMutex);
         return $state;
     }
 
@@ -139,10 +139,27 @@ abstract class Thread implements Runnable
      *
      * @return void
      */
-    public function setState($state) {
-        $this->lock();
+    public function setState($state)
+    {
+        fhread_mutex_lock($this->stateMutex);
         $this->state = $state;
-        $this->unlock();
+        fhread_mutex_unlock($this->stateMutex);
+    }
+    
+    /**
+     * Checks if state matches given state
+     * 
+     * @param int $state The state that should match current state
+     * 
+     * @return boolean
+     */
+    public function hasState($state)
+    {
+        $hasState = false;
+        fhread_mutex_lock($this->stateMutex);
+        $hasState = ($this->state === $state);
+        fhread_mutex_unlock($this->stateMutex);
+        return $hasState;
     }
 
     /**
@@ -154,14 +171,14 @@ abstract class Thread implements Runnable
     {
         // check if was started already
         if ($this->getState() >= self::STATE_JOINED) {
-            throw new \Exception('Thread has joined already!');
+            return;
         }
         // only if thread was started before
         if ($this->getState() < self::STATE_STARTED) {
             throw new \Exception('Thread has not been started yet!');
         }
 
-        fhread_join($this->getThreadId());
+        fhread_join($this->fhreadHandle);
         $this->setState(self::STATE_JOINED);
     }
     
@@ -172,7 +189,7 @@ abstract class Thread implements Runnable
      */
     public function isWaiting()
     {
-        return $this->getState() === self::STATE_WAITING;
+        return $this->hasState(self::STATE_WAITING);
     }
     
     /**
@@ -183,7 +200,7 @@ abstract class Thread implements Runnable
     public function wait()
     {
         $this->setState(self::STATE_WAITING);
-        fhread_cond_wait($this->syncCond, $this->syncMutex);
+        fhread_cond_wait($this->syncNotify, $this->syncMutex);
     }
     
     /**
@@ -193,8 +210,8 @@ abstract class Thread implements Runnable
      */
     public function notify()
     {
-        fhread_cond_signal($this->syncCond);
-        $this->setState(STATE_RUNNING);
+        fhread_cond_broadcast($this->syncNotify);
+        $this->setState(self::STATE_RUNNING);
     }
 
     /**
@@ -204,9 +221,7 @@ abstract class Thread implements Runnable
      */
     public function lock()
     {
-        if (!is_null($this->getMutex())) {
-            fhread_mutex_lock($this->getMutex());
-        }
+        fhread_mutex_lock($this->mutex);
     }
 
     /**
@@ -216,9 +231,7 @@ abstract class Thread implements Runnable
      */
     public function unlock()
     {
-        if (!is_null($this->getMutex())) {
-            fhread_mutex_unlock($this->getMutex());
-        }
+        fhread_mutex_unlock($this->mutex);
     }
 
     /**
@@ -229,18 +242,8 @@ abstract class Thread implements Runnable
     public function synchronized(\Closure $sync)
     {
         fhread_mutex_lock($this->syncMutex);
-        $sync($this);
+        $sync->__invoke($this);
         fhread_mutex_unlock($this->syncMutex);
-    }
-
-    /**
-     * Returns the thread mutex
-     *
-     * @return int
-     */
-    public function getMutex()
-    {
-        return $this->mutex;
     }
 
     /**
@@ -250,9 +253,9 @@ abstract class Thread implements Runnable
      */
     public function getThreadId()
     {
-        return $this->id;
+        return $this->threadId;
     }
-
+    
     /**
      * Returns current thread id
      */
@@ -260,20 +263,4 @@ abstract class Thread implements Runnable
     {
         return fhread_self();
     }
-
-    /**
-     * Destructs the object after the threads run method has been executed
-     *
-     * @return void
-     */
-    public function __destruct()
-    {
-        // check if thread is between joined and started state to join it automatically
-        // if php process is going to shutdown
-        if (($this->getState() > self::STATE_STARTED) && $this->getState() < self::STATE_JOINED) {
-            $this->join();
-        }
-        // in every other case do nothing
-    }
-
 }

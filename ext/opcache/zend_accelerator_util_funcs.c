@@ -65,6 +65,7 @@ static void zend_accel_destroy_zend_class(zval *zv)
 {
 	zend_class_entry *ce = Z_PTR_P(zv);
 	ce->function_table.pDestructor = zend_accel_destroy_zend_function;
+
 	destroy_zend_class(zv);
 }
 

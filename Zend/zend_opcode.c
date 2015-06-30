@@ -118,6 +118,7 @@ ZEND_API void zend_function_dtor(zval *zv)
 
 	if (function->type == ZEND_USER_FUNCTION) {
 		ZEND_ASSERT(function->common.function_name);
+
 		destroy_op_array(&function->op_array);
 		/* op_arrays are allocated on arena, so we don't have to free them */
 	} else {

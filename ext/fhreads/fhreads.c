@@ -40,6 +40,7 @@ static fhread_objects_store fhread_objects;
 ZEND_BEGIN_ARG_INFO_EX(arginfo_fhread_create, 0, 0, 1)
 	ZEND_ARG_INFO(0, runnable)
 	ZEND_ARG_INFO(1, thread_id)
+	ZEND_ARG_INFO(1, fhread_handle)
 ZEND_END_ARG_INFO()
 
 /* {{{ PHP_INI */
@@ -66,7 +67,6 @@ static void fhread_init_object_handlers()
 	fhreads_zend_handlers = zend_get_std_object_handlers();
 	// copy handler for internal freaded objects usage
 	memcpy(&fhreads_handlers, fhreads_zend_handlers, sizeof(zend_object_handlers));
-
 	// override object handlers
 	// fhreads_handlers.write_property = fhread_write_property;
 	fhreads_handlers.get_gc = NULL;
@@ -90,31 +90,36 @@ void fhread_object_store_init()
 } /* }}} */
 
 /* {{{ Creates and returns new fhread object */
-void fhread_object_destroy(fhread_object* fhread)
+static void fhread_object_destroy(fhread_object* fhread)
 {
-	// realloc zend_constants hashtables for context to be destroyed savely
-	FHREADS_EG(fhread->tsrm_ls, zend_constants) = (HashTable *) malloc(sizeof(HashTable));
-	zend_hash_init_ex(FHREADS_EG(fhread->tsrm_ls, zend_constants), 1, NULL, NULL, 1, 0);
-	// free context
-	tsrm_free_interpreter_context(fhread->tsrm_ls);
+	// join thread if not done yet
+	if (fhread->is_joined == 0) {
+		fhread->is_joined = 1;
+		pthread_join(fhread->thread_id, NULL);
+	}
 	// destroy mutex
-	pthread_mutex_destroy(&fhread->mutex);
+	pthread_mutex_destroy(&fhread->syncMutex);
+	pthread_mutex_destroy(&fhread->execMutex);
 	// destory condition
-	pthread_cond_destroy(&fhread->cond);
+	pthread_cond_destroy(&fhread->notify);
 	// finally free object itself
 	efree(fhread);
+	fhread = NULL;
 } /* }}} */
 
 /* {{{ Destroy the fhread object store */
 void fhread_object_store_destroy()
 {
 	fhread_object **obj_ptr, **end, *obj;
-	if (fhread_objects.top <= 1) {
+
+	if ((fhread_objects.top <= 1)) {
 		return;
 	}
+
 	// free all objects
 	end = fhread_objects.object_buckets + 1;
 	obj_ptr = fhread_objects.object_buckets + fhread_objects.top;
+
 	do {
 		obj_ptr--;
 		obj = *obj_ptr;
@@ -149,6 +154,8 @@ static fhread_object* fhread_object_create()
 {
 	// prepare fhread
 	fhread_object* fhread = emalloc(sizeof(fhread_object));
+	// init is joined flag
+	fhread->is_joined = 0;
 	// init executor flag
 	fhread->is_initialized = 0;
 	// set thread_id
@@ -156,10 +163,10 @@ static fhread_object* fhread_object_create()
 	// set creator tsrm ls
 	fhread->c_tsrm_ls = tsrm_get_ls_cache();
 	// init internal condition
-	pthread_cond_init(&fhread->cond, NULL);
-	// init internal mutex and lock it per default
-	pthread_mutex_init(&fhread->mutex, NULL);
-	pthread_mutex_lock(&fhread->mutex);
+	pthread_cond_init(&fhread->notify, NULL);
+	// init internal mutexe and lock it per default
+	pthread_mutex_init(&fhread->syncMutex, NULL);
+	pthread_mutex_init(&fhread->execMutex, NULL);
 	// return inited object
 	return fhread;
 } /* }}} */
@@ -174,22 +181,34 @@ void fhread_init_compiler(fhread_object *fhread) /* {{{ */
 /* {{{ Initialises the executor in fhreads context */
 void fhread_init_executor(fhread_object *fhread) /* {{{ */
 {
+	/*
 	// link included files
 	EG(included_files) = FHREADS_EG(fhread->c_tsrm_ls, included_files);
+
+	CG(function_table) = FHREADS_CG(fhread->c_tsrm_ls, function_table);
+	CG(class_table) = FHREADS_CG(fhread->c_tsrm_ls, class_table);
+
 	// link functions
-	EG(function_table) = FHREADS_CG(fhread->c_tsrm_ls, function_table);
+	EG(function_table) = CG(function_table);
 	// link classes
-	EG(class_table) = FHREADS_CG(fhread->c_tsrm_ls, class_table);
+	EG(class_table) = CG(class_table);
 	// link constants
 	EG(zend_constants) = FHREADS_EG(fhread->c_tsrm_ls, zend_constants);
 	// link regular list
 	EG(regular_list) = FHREADS_EG(fhread->c_tsrm_ls, regular_list);
 	// link regular list
 	EG(persistent_list) = FHREADS_EG(fhread->c_tsrm_ls, persistent_list);
+	*/
 	// link objects_store
 	EG(objects_store) = FHREADS_EG(fhread->c_tsrm_ls, objects_store);
 	// link symbol table
 	EG(symbol_table) = FHREADS_EG(fhread->c_tsrm_ls, symbol_table);
+
+	CG(function_table) = FHREADS_CG(fhread->c_tsrm_ls, function_table);
+	EG(function_table) = CG(function_table);
+
+	CG(class_table) = FHREADS_CG(fhread->c_tsrm_ls, class_table);
+	EG(class_table) = CG(class_table);
 
 	zend_init_fpu();
 
@@ -208,12 +227,14 @@ void fhread_init_executor(fhread_object *fhread) /* {{{ */
 
 	zend_vm_stack_init();
 
+	zend_hash_init(&EG(symbol_table), 64, NULL, ZVAL_PTR_DTOR, 0);
 	EG(valid_symbol_table) = 1;
+
 	EG(ticks_count) = 0;
 
 	ZVAL_UNDEF(&EG(user_error_handler));
 
-	EG(current_execute_data) = NULL;
+	EG(current_execute_data) = (zend_execute_data*) emalloc(sizeof(zend_execute_data));
 
 	zend_stack_init(&EG(user_error_handlers_error_reporting), sizeof(int));
 	zend_stack_init(&EG(user_error_handlers), sizeof(zval));
@@ -259,7 +280,7 @@ void fhread_init(fhread_object* fhread)
 /* {{{ Run the runnable zval in given fhread context */
 void fhread_run(fhread_object* fhread)
 {
-	zval runnable, ret_val;
+	zval runnable, retval;
 	zend_object* obj;
 
 	// init fhread before run it
@@ -267,18 +288,24 @@ void fhread_run(fhread_object* fhread)
 
 	// get zval from object handle
 	obj = EG(objects_store).object_buckets[fhread->runnable_handle];
-	ZVAL_OBJ(&runnable, obj);
-	Z_ADDREF(runnable);
-
-	// inject fhreads handlers
-	Z_OBJ_HT(runnable) = &fhreads_handlers;
+	EG(scope) = obj->ce;
 
 	// send signal for creator logic to go ahead
-	pthread_cond_signal(&fhread->cond);
+	pthread_cond_broadcast(&fhread->notify);
 
-	// call run method
-	// todo: check if interface runnable was implemented...
-	zend_call_method_with_0_params(&runnable, obj->ce, NULL, "run", &ret_val);
+	// call run method on runnable
+	zend_string *name = zend_string_init("run", sizeof("run")-1, 0);
+	zend_function *func_run = zend_hash_find_ptr(&obj->ce->function_table, name);
+
+	EG(current_execute_data)->func = func_run;
+	EG(current_execute_data)->called_scope = obj->ce;
+	Z_OBJ(EG(current_execute_data)->This) = obj;
+	GC_REFCOUNT(obj)++;
+	EG(current_execute_data)->return_value = &retval;
+
+	zend_execute((zend_op_array*) func_run, &retval);
+	zval_ptr_dtor(&retval);
+
 } /* }}} */
 
 /* {{{ The routine to call for pthread_create */
@@ -315,6 +342,7 @@ PHP_FUNCTION(fhread_mutex_init)
 {
 	pthread_mutex_t *mutex;
 	if ((mutex=(pthread_mutex_t*) calloc(1, sizeof(pthread_mutex_t)))!=NULL) {
+		pthread_mutex_init(mutex, NULL);
 		RETURN_LONG((ulong)mutex);
 	}
 } /* }}} */
@@ -358,8 +386,10 @@ PHP_FUNCTION(fhread_cond_destroy)
 /* {{{ proto fhread_cond_init() */
 PHP_FUNCTION(fhread_cond_init)
 {
+	pthread_cond_t *condition;
 	pthread_cond_t *cond;
 	if ((cond=(pthread_cond_t*) calloc(1, sizeof(pthread_cond_t)))!=NULL) {
+		pthread_cond_init(cond, NULL);
 		RETURN_LONG((ulong)cond);
 	}
 } /* }}} */
@@ -408,14 +438,17 @@ PHP_FUNCTION(fhread_self)
 PHP_FUNCTION(fhread_create)
 {
 	// init vars
-	zval *runnable = NULL, *thread_id = NULL;
+	zval *runnable = NULL, *thread_id = NULL, *fhread_handle = NULL;
 
 	// parse params
-	if (zend_parse_parameters(ZEND_NUM_ARGS(), "o|z/", &runnable, &thread_id) == FAILURE)
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "o|z/z/", &runnable, &thread_id, &fhread_handle) == FAILURE)
 		return;
 
-	Z_ADDREF_P(runnable);
 
+	// inject fhreads handlers
+	Z_OBJ_HT_P(runnable) = &fhreads_handlers;
+	// add ref to runnable
+	Z_ADDREF_P(runnable);
 	// todo: check if free fhread object is available and reuse it...
 
 	// create new fhread object
@@ -424,6 +457,7 @@ PHP_FUNCTION(fhread_create)
 	uint32_t fhreads_object_handle = fhread_object_store_put(fhread);
 	// save runnable handle from zval
 	fhread->runnable_handle = Z_OBJ_HANDLE_P(runnable);
+	fhread->runnable = runnable;
 
 	// create thread and start fhread__routine
 	int pthread_status = pthread_create(&fhread->thread_id, NULL, fhread_routine, &fhreads_object_handle);
@@ -434,8 +468,13 @@ PHP_FUNCTION(fhread_create)
 		ZVAL_LONG(thread_id, (long)fhread->thread_id);
 	}
 
+	if (fhread_handle) {
+		zval_dtor(fhread_handle);
+		ZVAL_LONG(fhread_handle, (long)fhreads_object_handle);
+	}
+
 	// wait on condition to get singal as soon as the thread is ready for take off
-	pthread_cond_wait(&fhread->cond, &fhread->mutex);
+	pthread_cond_wait(&fhread->notify, &fhread->syncMutex);
 
 	// return thread status
 	RETURN_LONG((long)pthread_status);
@@ -447,16 +486,23 @@ PHP_FUNCTION(fhread_create)
    is not NULL.*/
 PHP_FUNCTION(fhread_join)
 {
-	long thread_id;
+	uint32_t fhread_handle;
+	fhread_object* fhread;
 	int status;
 
 	// parse thread id for thread to join to
-	if (zend_parse_parameters(ZEND_NUM_ARGS(), "l", &thread_id) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "l", &fhread_handle) == FAILURE) {
 		RETURN_NULL();
 	}
 
-	// join thread with given id
-	status = pthread_join((pthread_t)thread_id, NULL);
+	// get fhread object
+	fhread = fhread_objects.object_buckets[fhread_handle];
+
+	// join thread if not done yet
+	if (fhread->is_joined == 0) {
+		fhread->is_joined = 1;
+		status = pthread_join(fhread->thread_id, NULL);
+	}
 
 	// return status
 	RETURN_LONG((long)status);
@@ -480,6 +526,9 @@ PHP_MINIT_FUNCTION(fhreads)
 /* {{{ PHP_MSHUTDOWN_FUNCTION */
 PHP_MSHUTDOWN_FUNCTION(fhreads)
 {
+	// destroy fhreads object store
+	fhread_object_store_destroy();
+
 	UNREGISTER_INI_ENTRIES();
 
 	return SUCCESS;
@@ -502,8 +551,6 @@ PHP_RINIT_FUNCTION(fhreads)
 /* {{{ PHP_RSHUTDOWN_FUNCTION */
 PHP_RSHUTDOWN_FUNCTION(fhreads)
 {
-	// destroy fhreads object store
-	fhread_object_store_destroy();
 
 	return SUCCESS;
 } /* }}} */

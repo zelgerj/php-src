@@ -1,6 +1,5 @@
 <?php
 
-// to be compatible with pthreads lib
 if (!class_exists('\Thread')) {
     require_once __DIR__ . DIRECTORY_SEPARATOR . "Thread.php";
 }
@@ -25,24 +24,26 @@ class ExampleThread extends Thread {
         
     }
     
-    public function run(){
-        while (!$this->isWaiting()) {
-            /* the process is not yet waiting */
-            /* in the real world, this would indicate
-                that the process is still working */
-            /* in the real world, you might have work to do here */
-            echo ".";
+    public function run() {
+        try {
+            while (!$this->isWaiting()) {
+                /* the process is not yet waiting */
+                /* in the real world, this would indicate
+                    that the process is still working */
+                /* in the real world, you might have work to do here */
+                echo ".";
+            }
+            echo "\n";
+            
+            /* always synchronize before calling notify/wait */
+            $this->synchronized(function($me){
+                /* there's no harm in notifying when no one is waiting */
+                /* better that you notify no one than deadlock in any case */
+                $me->notify();
+            }, $this);
+        } catch (EngineException $e) {
+            var_dump($e);
         }
-        echo "###\n";
-        
-        $this->notify();
-        /* always synchronize before calling notify/wait */
-        $this->synchronized(function($me){
-            /* there's no harm in notifying when no one is waiting */
-            /* better that you notify no one than deadlock in any case */
-            printf("\nNotify ...\n");
-            $me->notify();
-        }, $this);
     }
 }
 
@@ -52,6 +53,7 @@ $t = new ExampleThread();
 /* start the new thread */
 if ($t->start()) {
     printf("\nProcess Working ...\n");
+    
     do_some_work(1000);
       
     /* synchronize in order to call wait */
@@ -65,7 +67,10 @@ if ($t->start()) {
         $me->wait();
         printf("Process Done ...\n");
     }, $t);
+    
 }
 
-$t->join();
 
+echo "finished script...\n";
+
+?>
