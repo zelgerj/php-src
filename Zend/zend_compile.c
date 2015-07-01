@@ -338,7 +338,7 @@ void shutdown_compiler(void) /* {{{ */
 	zend_stack_destroy(&CG(delayed_oplines_stack));
 	zend_hash_destroy(&CG(filenames_table));
 	zend_hash_destroy(&CG(const_filenames));
-	zend_arena_destroy(CG(arena));
+	// zend_arena_destroy(CG(arena));
 }
 /* }}} */
 

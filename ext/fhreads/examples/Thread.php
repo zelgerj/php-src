@@ -79,6 +79,7 @@ abstract class Thread implements Runnable
      * @var int
      */
     protected $syncNotify = null;
+    protected $synched = array();
 
     /**
      * Holds thread state flag
@@ -242,7 +243,7 @@ abstract class Thread implements Runnable
     public function synchronized(\Closure $sync)
     {
         fhread_mutex_lock($this->syncMutex);
-        $sync->__invoke($this);
+        $sync->call($this);
         fhread_mutex_unlock($this->syncMutex);
     }
 

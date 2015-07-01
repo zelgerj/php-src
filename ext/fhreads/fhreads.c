@@ -97,11 +97,16 @@ static void fhread_object_destroy(fhread_object* fhread)
 		fhread->is_joined = 1;
 		pthread_join(fhread->thread_id, NULL);
 	}
+
+	return;
+
 	// destroy mutex
 	pthread_mutex_destroy(&fhread->syncMutex);
 	pthread_mutex_destroy(&fhread->execMutex);
 	// destory condition
 	pthread_cond_destroy(&fhread->notify);
+	// free tsrm context
+	tsrm_free_interpreter_context(fhread->tsrm_ls);
 	// finally free object itself
 	efree(fhread);
 	fhread = NULL;
@@ -110,6 +115,7 @@ static void fhread_object_destroy(fhread_object* fhread)
 /* {{{ Destroy the fhread object store */
 void fhread_object_store_destroy()
 {
+	return;
 	fhread_object **obj_ptr, **end, *obj;
 
 	if ((fhread_objects.top <= 1)) {
@@ -162,6 +168,8 @@ static fhread_object* fhread_object_create()
 	fhread->thread_id = tsrm_thread_id();
 	// set creator tsrm ls
 	fhread->c_tsrm_ls = tsrm_get_ls_cache();
+	// alloc runnable zval
+	fhread->runnable = (zval *) emalloc(sizeof(zval));
 	// init internal condition
 	pthread_cond_init(&fhread->notify, NULL);
 	// init internal mutexe and lock it per default
@@ -202,13 +210,9 @@ void fhread_init_executor(fhread_object *fhread) /* {{{ */
 	// link objects_store
 	EG(objects_store) = FHREADS_EG(fhread->c_tsrm_ls, objects_store);
 	// link symbol table
-	EG(symbol_table) = FHREADS_EG(fhread->c_tsrm_ls, symbol_table);
-
-	CG(function_table) = FHREADS_CG(fhread->c_tsrm_ls, function_table);
-	EG(function_table) = CG(function_table);
-
-	CG(class_table) = FHREADS_CG(fhread->c_tsrm_ls, class_table);
-	EG(class_table) = CG(class_table);
+	// EG(symbol_table) = FHREADS_EG(fhread->c_tsrm_ls, symbol_table);
+	EG(function_table) = FHREADS_CG(fhread->c_tsrm_ls, function_table);
+	EG(class_table) = FHREADS_CG(fhread->c_tsrm_ls, class_table);
 
 	zend_init_fpu();
 
@@ -280,32 +284,26 @@ void fhread_init(fhread_object* fhread)
 /* {{{ Run the runnable zval in given fhread context */
 void fhread_run(fhread_object* fhread)
 {
-	zval runnable, retval;
-	zend_object* obj;
+	zend_object *obj;
 
 	// init fhread before run it
 	fhread_init(fhread);
 
 	// get zval from object handle
 	obj = EG(objects_store).object_buckets[fhread->runnable_handle];
-	EG(scope) = obj->ce;
+	Z_OBJ(EG(current_execute_data)->This) = obj;
+	Z_ADDREF(EG(current_execute_data)->This);
+
+	zend_string *name = zend_string_init("run", sizeof("run")-1, 0);
+	EG(current_execute_data)->func = zend_hash_find_ptr(&obj->ce->function_table, name);
 
 	// send signal for creator logic to go ahead
 	pthread_cond_broadcast(&fhread->notify);
 
 	// call run method on runnable
-	zend_string *name = zend_string_init("run", sizeof("run")-1, 0);
-	zend_function *func_run = zend_hash_find_ptr(&obj->ce->function_table, name);
+	zend_execute((zend_op_array*) EG(current_execute_data)->func, NULL);
 
-	EG(current_execute_data)->func = func_run;
-	EG(current_execute_data)->called_scope = obj->ce;
-	Z_OBJ(EG(current_execute_data)->This) = obj;
-	GC_REFCOUNT(obj)++;
-	EG(current_execute_data)->return_value = &retval;
-
-	zend_execute((zend_op_array*) func_run, &retval);
-	zval_ptr_dtor(&retval);
-
+	Z_ADDREF(EG(current_execute_data)->This);
 } /* }}} */
 
 /* {{{ The routine to call for pthread_create */
@@ -438,26 +436,28 @@ PHP_FUNCTION(fhread_self)
 PHP_FUNCTION(fhread_create)
 {
 	// init vars
-	zval *runnable = NULL, *thread_id = NULL, *fhread_handle = NULL;
-
-	// parse params
-	if (zend_parse_parameters(ZEND_NUM_ARGS(), "o|z/z/", &runnable, &thread_id, &fhread_handle) == FAILURE)
-		return;
-
+	zval *thread_id = NULL, *fhread_handle = NULL;
 
 	// inject fhreads handlers
-	Z_OBJ_HT_P(runnable) = &fhreads_handlers;
+	// Z_OBJ_HT_P(runnable) = &fhreads_handlers;
 	// add ref to runnable
-	Z_ADDREF_P(runnable);
+	// Z_ADDREF_P(runnable);
 	// todo: check if free fhread object is available and reuse it...
 
 	// create new fhread object
 	fhread_object* fhread = fhread_object_create();
 	// add new object and save handle
 	uint32_t fhreads_object_handle = fhread_object_store_put(fhread);
+
+
+	// parse params
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "o|z/z/", &fhread->runnable, &thread_id, &fhread_handle) == FAILURE)
+		return;
+
+	Z_ADDREF_P(fhread->runnable);
+
 	// save runnable handle from zval
-	fhread->runnable_handle = Z_OBJ_HANDLE_P(runnable);
-	fhread->runnable = runnable;
+	fhread->runnable_handle = Z_OBJ_HANDLE_P(fhread->runnable);
 
 	// create thread and start fhread__routine
 	int pthread_status = pthread_create(&fhread->thread_id, NULL, fhread_routine, &fhreads_object_handle);

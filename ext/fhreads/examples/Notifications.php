@@ -36,11 +36,11 @@ class ExampleThread extends Thread {
             echo "\n";
             
             /* always synchronize before calling notify/wait */
-            $this->synchronized(function($me){
+            $this->synchronized(function(){
                 /* there's no harm in notifying when no one is waiting */
                 /* better that you notify no one than deadlock in any case */
-                $me->notify();
-            }, $this);
+                $this->notify();
+            });
         } catch (EngineException $e) {
             var_dump($e);
         }
@@ -48,7 +48,7 @@ class ExampleThread extends Thread {
 }
 
 /* construct the new thread */
-$t = new ExampleThread();
+$GLOBALS['asdf'] = $t = new ExampleThread();
 
 /* start the new thread */
 if ($t->start()) {
@@ -57,16 +57,16 @@ if ($t->start()) {
     do_some_work(1000);
       
     /* synchronize in order to call wait */
-    $t->synchronized(function($me){
+    $t->synchronized(function(){
         /*
         * note: do not stay synchronized for longer than you must
         *   this is to reduce contention for the lock 
         *   associated with the threads internal state
         */
         printf("\nProcess Waiting ...\n");
-        $me->wait();
+        $this->wait();
         printf("Process Done ...\n");
-    }, $t);
+    });
     
 }
 
