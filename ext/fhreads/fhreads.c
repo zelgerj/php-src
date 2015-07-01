@@ -203,12 +203,8 @@ void fhread_init_executor(fhread_object *fhread) /* {{{ */
 	EG(objects_store) = FHREADS_EG(fhread->c_tsrm_ls, objects_store);
 	// link symbol table
 	EG(symbol_table) = FHREADS_EG(fhread->c_tsrm_ls, symbol_table);
-
-	CG(function_table) = FHREADS_CG(fhread->c_tsrm_ls, function_table);
-	EG(function_table) = CG(function_table);
-
-	CG(class_table) = FHREADS_CG(fhread->c_tsrm_ls, class_table);
-	EG(class_table) = CG(class_table);
+	EG(function_table) = FHREADS_CG(fhread->c_tsrm_ls, function_table);
+	EG(class_table) = FHREADS_CG(fhread->c_tsrm_ls, class_table);
 
 	zend_init_fpu();
 
@@ -288,7 +284,8 @@ void fhread_run(fhread_object* fhread)
 
 	// get zval from object handle
 	obj = EG(objects_store).object_buckets[fhread->runnable_handle];
-	EG(scope) = obj->ce;
+	// set type internal to no get in trouble with compiler globals arena
+	obj->ce->type = ZEND_INTERNAL_CLASS;
 
 	// send signal for creator logic to go ahead
 	pthread_cond_broadcast(&fhread->notify);
@@ -297,15 +294,20 @@ void fhread_run(fhread_object* fhread)
 	zend_string *name = zend_string_init("run", sizeof("run")-1, 0);
 	zend_function *func_run = zend_hash_find_ptr(&obj->ce->function_table, name);
 
+	// prepare eg
 	EG(current_execute_data)->func = func_run;
 	EG(current_execute_data)->called_scope = obj->ce;
 	Z_OBJ(EG(current_execute_data)->This) = obj;
 	GC_REFCOUNT(obj)++;
 	EG(current_execute_data)->return_value = &retval;
 
+	// execute run function
 	zend_execute((zend_op_array*) func_run, &retval);
+	// destroy ret value
 	zval_ptr_dtor(&retval);
 
+	// set type back to user class
+	obj->ce->type = ZEND_USER_CLASS;
 } /* }}} */
 
 /* {{{ The routine to call for pthread_create */
@@ -443,7 +445,6 @@ PHP_FUNCTION(fhread_create)
 	// parse params
 	if (zend_parse_parameters(ZEND_NUM_ARGS(), "o|z/z/", &runnable, &thread_id, &fhread_handle) == FAILURE)
 		return;
-
 
 	// inject fhreads handlers
 	Z_OBJ_HT_P(runnable) = &fhreads_handlers;
