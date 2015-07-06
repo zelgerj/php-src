@@ -68,8 +68,8 @@ if ($t->start()) {
         printf("Process Done ...\n");
     }, $t);
     
+    $t->join();
 }
-
 
 echo "finished script...\n";
 
