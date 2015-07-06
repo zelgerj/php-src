@@ -25,12 +25,12 @@
 #include "zend_API.h"
 #include "zend_objects_API.h"
 
-ZEND_API int (*zend_objects_store_get_handle_ex)();
-ZEND_API void (*zend_objects_store_add_to_free_list_ex)(int handle);
+ZEND_API uint32_t (*zend_objects_store_get_handle_ex)();
+ZEND_API void (*zend_objects_store_add_to_free_list_ex)(uint32_t handle);
 
-ZEND_API int zend_objects_store_get_handle() /* {{{ */
+ZEND_API uint32_t zend_objects_store_get_handle() /* {{{ */
 {
-	int handle;
+	uint32_t handle;
 
 	if (EG(objects_store).free_list_head != -1) {
 		handle = EG(objects_store).free_list_head;
@@ -46,7 +46,7 @@ ZEND_API int zend_objects_store_get_handle() /* {{{ */
 	return handle;
 } /* }}} */
 
-ZEND_API void zend_objects_store_add_to_free_list(handle) /* {{{ */
+ZEND_API void zend_objects_store_add_to_free_list(uint32_t handle) /* {{{ */
 {
 	SET_OBJ_BUCKET_NUMBER(EG(objects_store).object_buckets[handle], EG(objects_store).free_list_head);
 	EG(objects_store).free_list_head = handle;

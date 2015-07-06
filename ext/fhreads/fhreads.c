@@ -36,10 +36,9 @@ ZEND_END_MODULE_GLOBALS(fhreads)
 /* True global resources - no need for thread safety here */
 static zend_object_handlers fhreads_handlers, *fhreads_zend_handlers;
 static fhread_objects_store fhread_objects;
-
-uint32_t fhreads_zend_objects_store_top = 1;
-int fhreads_zend_objects_store_free_list_head = -1;
-static pthread_mutex_t zend_objects_store_mutex = PTHREAD_MUTEX_INITIALIZER;
+static uint32_t fhreads_zend_objects_store_top = 1;
+static int fhreads_zend_objects_store_free_list_head = -1;
+static pthread_mutex_t fhreads_zend_objects_store_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_fhread_create, 0, 0, 1)
 	ZEND_ARG_INFO(0, runnable)
@@ -52,42 +51,41 @@ PHP_INI_BEGIN()
     STD_PHP_INI_ENTRY("fhreads.global_value", "42", PHP_INI_ALL, OnUpdateLong, global_value, zend_fhreads_globals, fhreads_globals)
 PHP_INI_END() /* }}} */
 
-
-
-int fhreads_zend_objects_store_get_handle() /* {{{ */
+/* {{{ Wrappes orig zend_objects_store_get_handle function to make it thread-safe */
+uint32_t fhreads_zend_objects_store_get_handle() /* {{{ */
 {
-	int handle;
-
-	pthread_mutex_lock(&zend_objects_store_mutex);
-
+	uint32_t handle;
+	// lock object store mutex
+	pthread_mutex_lock(&fhreads_zend_objects_store_mutex);
+	// set global values to objects store in current context
 	EG(objects_store).top = fhreads_zend_objects_store_top;
 	EG(objects_store).free_list_head = fhreads_zend_objects_store_free_list_head;
-
+	// get next handle from orig functionality
 	handle = zend_objects_store_get_handle();
-
-	fhreads_zend_objects_store_top = EG(objects_store).free_list_head;
-	fhreads_zend_objects_store_free_list_head = EG(objects_store).top;
-
-	pthread_mutex_unlock(&zend_objects_store_mutex);
-
+	// write back to global vars for next one
+	fhreads_zend_objects_store_top = EG(objects_store).top;
+	fhreads_zend_objects_store_free_list_head = EG(objects_store).free_list_head;
+	// unlock it
+	pthread_mutex_unlock(&fhreads_zend_objects_store_mutex);
+	// return handle
 	return handle;
 } /* }}} */
 
-
-
-void fhreads_zend_objects_store_add_to_free_list(handle) /* {{{ */
+/* {{{ Wrappes orig fhreads_zend_objects_store_add_to_free_list function to make it thread-safe */
+void fhreads_zend_objects_store_add_to_free_list(uint32_t handle) /* {{{ */
 {
-	pthread_mutex_lock(&zend_objects_store_mutex);
-
+	// lock it
+	pthread_mutex_lock(&fhreads_zend_objects_store_mutex);
+	// set global vars to objects store
 	EG(objects_store).free_list_head = fhreads_zend_objects_store_free_list_head;
-	zend_objects_store_add_to_free_list();
+	// call orig function
+	zend_objects_store_add_to_free_list(handle);
+	// write back to globals for next one
 	fhreads_zend_objects_store_free_list_head = EG(objects_store).free_list_head;
-
-	pthread_mutex_unlock(&zend_objects_store_mutex);
+	// unlock it
+	pthread_mutex_unlock(&fhreads_zend_objects_store_mutex);
 }
 /* }}} */
-
-
 
 /* {{{ Prepares zend objects store for threaded environment */
 static void fhread_prepare_zend_objects_store()
@@ -99,6 +97,10 @@ static void fhread_prepare_zend_objects_store()
 		EG(objects_store).size = new_objects_store_size;
 		EG(objects_store).object_buckets = (zend_object **) erealloc(EG(objects_store).object_buckets, EG(objects_store).size * sizeof(zend_object*));
 	}
+
+	// synchronize objects store
+	zend_objects_store_get_handle_ex = fhreads_zend_objects_store_get_handle;
+	zend_objects_store_add_to_free_list_ex = fhreads_zend_objects_store_add_to_free_list;
 } /* }}} */
 
 /* {{{ Initialises the fhread object handlers */
@@ -222,30 +224,17 @@ void fhread_init_compiler(fhread_object *fhread) /* {{{ */
 /* {{{ Initialises the executor in fhreads context */
 void fhread_init_executor(fhread_object *fhread) /* {{{ */
 {
-	/*
-	// link included files
+	// link global tables
 	EG(included_files) = FHREADS_EG(fhread->c_tsrm_ls, included_files);
-
 	CG(function_table) = FHREADS_CG(fhread->c_tsrm_ls, function_table);
 	CG(class_table) = FHREADS_CG(fhread->c_tsrm_ls, class_table);
-
-	// link functions
-	EG(function_table) = CG(function_table);
-	// link classes
-	EG(class_table) = CG(class_table);
-	// link constants
-	EG(zend_constants) = FHREADS_EG(fhread->c_tsrm_ls, zend_constants);
-	// link regular list
-	EG(regular_list) = FHREADS_EG(fhread->c_tsrm_ls, regular_list);
-	// link regular list
-	EG(persistent_list) = FHREADS_EG(fhread->c_tsrm_ls, persistent_list);
-	*/
-	// link objects_store
-	EG(objects_store) = FHREADS_EG(fhread->c_tsrm_ls, objects_store);
-	// link symbol table
-	EG(symbol_table) = FHREADS_EG(fhread->c_tsrm_ls, symbol_table);
 	EG(function_table) = FHREADS_CG(fhread->c_tsrm_ls, function_table);
 	EG(class_table) = FHREADS_CG(fhread->c_tsrm_ls, class_table);
+	EG(zend_constants) = FHREADS_EG(fhread->c_tsrm_ls, zend_constants);
+	EG(regular_list) = FHREADS_EG(fhread->c_tsrm_ls, regular_list);
+	EG(persistent_list) = FHREADS_EG(fhread->c_tsrm_ls, persistent_list);
+	EG(objects_store) = FHREADS_EG(fhread->c_tsrm_ls, objects_store);
+	// EG(symbol_table) = FHREADS_EG(fhread->c_tsrm_ls, symbol_table);
 
 	zend_init_fpu();
 
@@ -517,6 +506,9 @@ PHP_FUNCTION(fhread_create)
 
 	// wait on condition to get singal as soon as the thread is ready for take off
 	pthread_cond_wait(&fhread->notify, &fhread->syncMutex);
+
+	// add ref since its used in another context
+	Z_ADDREF_P(runnable);
 
 	// return thread status
 	RETURN_LONG((long)pthread_status);
