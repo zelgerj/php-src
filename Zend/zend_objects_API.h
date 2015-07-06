@@ -55,6 +55,8 @@ ZEND_API void zend_objects_store_mark_destructed(zend_objects_store *objects);
 ZEND_API void zend_objects_store_destroy(zend_objects_store *objects);
 
 /* Store API functions */
+ZEND_API int (*zend_objects_store_get_handle_ex)();
+ZEND_API void (*zend_objects_store_add_to_free_list_ex)(int handle);
 ZEND_API void zend_objects_store_put(zend_object *object);
 ZEND_API void zend_objects_store_del(zend_object *object);
 ZEND_API void zend_objects_store_free(zend_object *object);

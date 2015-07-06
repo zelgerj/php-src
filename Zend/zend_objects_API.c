@@ -25,17 +25,44 @@
 #include "zend_API.h"
 #include "zend_objects_API.h"
 
-uint32_t zend_global_top = 1;
-int zend_global_free_list_head = -1;
-static pthread_mutex_t zend_objects_store_mutex = PTHREAD_MUTEX_INITIALIZER;
+ZEND_API int (*zend_objects_store_get_handle_ex)();
+ZEND_API void (*zend_objects_store_add_to_free_list_ex)(int handle);
+
+ZEND_API int zend_objects_store_get_handle() /* {{{ */
+{
+	int handle;
+
+	if (EG(objects_store).free_list_head != -1) {
+		handle = EG(objects_store).free_list_head;
+		EG(objects_store).free_list_head = GET_OBJ_BUCKET_NUMBER(EG(objects_store).object_buckets[handle]);
+	} else {
+		if (EG(objects_store).top == EG(objects_store).size) {
+			EG(objects_store).size <<= 1;
+			EG(objects_store).object_buckets = (zend_object **) erealloc(EG(objects_store).object_buckets, EG(objects_store).size * sizeof(zend_object*));
+		}
+		handle = EG(objects_store).top++;
+	}
+
+	return handle;
+} /* }}} */
+
+ZEND_API void zend_objects_store_add_to_free_list(handle) /* {{{ */
+{
+	SET_OBJ_BUCKET_NUMBER(EG(objects_store).object_buckets[handle], EG(objects_store).free_list_head);
+	EG(objects_store).free_list_head = handle;
+}
+/* }}} */
 
 ZEND_API void zend_objects_store_init(zend_objects_store *objects, uint32_t init_size)
 {
 	objects->object_buckets = (zend_object **) emalloc(init_size * sizeof(zend_object*));
-	objects->top = zend_global_top; /* Skip 0 so that handles are true */
+	objects->top = 1; /* Skip 0 so that handles are true */
 	objects->size = init_size;
-	objects->free_list_head = zend_global_free_list_head;
+	objects->free_list_head = -1;
 	memset(&objects->object_buckets[0], 0, sizeof(zend_object*));
+
+	zend_objects_store_get_handle_ex = zend_objects_store_get_handle;
+	zend_objects_store_add_to_free_list_ex = zend_objects_store_add_to_free_list;
 }
 
 ZEND_API void zend_objects_store_destroy(zend_objects_store *objects)
@@ -126,44 +153,15 @@ ZEND_API void zend_objects_store_free_object_storage(zend_objects_store *objects
 	}
 }
 
-
 /* Store objects API */
 
-ZEND_API void zend_objects_store_put(zend_object *object)
+ZEND_API void zend_objects_store_put(zend_object *object) /* {{{ */
 {
-	int handle;
-
-	pthread_mutex_lock(&zend_objects_store_mutex);
-	EG(objects_store).top = zend_global_top;
-	EG(objects_store).free_list_head = zend_global_free_list_head;
-
-	if (EG(objects_store).free_list_head != -1) {
-		handle = EG(objects_store).free_list_head;
-		EG(objects_store).free_list_head = GET_OBJ_BUCKET_NUMBER(EG(objects_store).object_buckets[handle]);
-	} else {
-		if (EG(objects_store).top == EG(objects_store).size) {
-			EG(objects_store).size <<= 1;
-			EG(objects_store).object_buckets = (zend_object **) erealloc(EG(objects_store).object_buckets, EG(objects_store).size * sizeof(zend_object*));
-		}
-		handle = EG(objects_store).top++;
-	}
+	int handle = zend_objects_store_get_handle_ex();
 	object->handle = handle;
 	EG(objects_store).object_buckets[handle] = object;
-
-	zend_global_free_list_head = EG(objects_store).free_list_head;
-	zend_global_top = EG(objects_store).top;
-	pthread_mutex_unlock(&zend_objects_store_mutex);
 }
-
-#define ZEND_OBJECTS_STORE_ADD_TO_FREE_LIST(handle) \
-			pthread_mutex_lock(&zend_objects_store_mutex); \
-			EG(objects_store).free_list_head = zend_global_free_list_head; \
-			\
-            SET_OBJ_BUCKET_NUMBER(EG(objects_store).object_buckets[handle], EG(objects_store).free_list_head);	\
-			EG(objects_store).free_list_head = handle; \
-			\
-			zend_global_free_list_head = EG(objects_store).free_list_head; \
-			pthread_mutex_unlock(&zend_objects_store_mutex);
+/* }}} */
 
 ZEND_API void zend_objects_store_free(zend_object *object) /* {{{ */
 {
@@ -172,7 +170,7 @@ ZEND_API void zend_objects_store_free(zend_object *object) /* {{{ */
 
 	GC_REMOVE_FROM_BUFFER(object);
 	efree(ptr);
-	ZEND_OBJECTS_STORE_ADD_TO_FREE_LIST(handle);
+	zend_objects_store_add_to_free_list_ex(handle);
 }
 /* }}} */
 
@@ -221,7 +219,7 @@ ZEND_API void zend_objects_store_del(zend_object *object) /* {{{ */
 				ptr = ((char*)object) - object->handlers->offset;
 				GC_REMOVE_FROM_BUFFER(object);
 				efree(ptr);
-				ZEND_OBJECTS_STORE_ADD_TO_FREE_LIST(handle);
+				zend_objects_store_add_to_free_list_ex(handle);
 			}
 
 			if (failure) {

@@ -37,6 +37,10 @@ ZEND_END_MODULE_GLOBALS(fhreads)
 static zend_object_handlers fhreads_handlers, *fhreads_zend_handlers;
 static fhread_objects_store fhread_objects;
 
+uint32_t fhreads_zend_objects_store_top = 1;
+int fhreads_zend_objects_store_free_list_head = -1;
+static pthread_mutex_t zend_objects_store_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_fhread_create, 0, 0, 1)
 	ZEND_ARG_INFO(0, runnable)
 	ZEND_ARG_INFO(1, thread_id)
@@ -47,6 +51,43 @@ ZEND_END_ARG_INFO()
 PHP_INI_BEGIN()
     STD_PHP_INI_ENTRY("fhreads.global_value", "42", PHP_INI_ALL, OnUpdateLong, global_value, zend_fhreads_globals, fhreads_globals)
 PHP_INI_END() /* }}} */
+
+
+
+int fhreads_zend_objects_store_get_handle() /* {{{ */
+{
+	int handle;
+
+	pthread_mutex_lock(&zend_objects_store_mutex);
+
+	EG(objects_store).top = fhreads_zend_objects_store_top;
+	EG(objects_store).free_list_head = fhreads_zend_objects_store_free_list_head;
+
+	handle = zend_objects_store_get_handle();
+
+	fhreads_zend_objects_store_top = EG(objects_store).free_list_head;
+	fhreads_zend_objects_store_free_list_head = EG(objects_store).top;
+
+	pthread_mutex_unlock(&zend_objects_store_mutex);
+
+	return handle;
+} /* }}} */
+
+
+
+void fhreads_zend_objects_store_add_to_free_list(handle) /* {{{ */
+{
+	pthread_mutex_lock(&zend_objects_store_mutex);
+
+	EG(objects_store).free_list_head = fhreads_zend_objects_store_free_list_head;
+	zend_objects_store_add_to_free_list();
+	fhreads_zend_objects_store_free_list_head = EG(objects_store).free_list_head;
+
+	pthread_mutex_unlock(&zend_objects_store_mutex);
+}
+/* }}} */
+
+
 
 /* {{{ Prepares zend objects store for threaded environment */
 static void fhread_prepare_zend_objects_store()
