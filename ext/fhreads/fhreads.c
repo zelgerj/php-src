@@ -36,9 +36,9 @@ ZEND_END_MODULE_GLOBALS(fhreads)
 /* True global resources - no need for thread safety here */
 static zend_object_handlers fhreads_handlers, *fhreads_zend_handlers;
 static fhread_objects_store fhread_objects;
-static uint32_t fhreads_zend_objects_store_top = 1;
-static int fhreads_zend_objects_store_free_list_head = -1;
-static pthread_mutex_t fhreads_zend_objects_store_mutex = PTHREAD_MUTEX_INITIALIZER;
+uint32_t fhreads_zend_objects_store_top;
+int fhreads_zend_objects_store_free_list_head;
+pthread_mutex_t fhreads_zend_objects_store_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_fhread_create, 0, 0, 1)
 	ZEND_ARG_INFO(0, runnable)
@@ -61,7 +61,8 @@ ZEND_API uint32_t fhreads_zend_objects_store_get_handle() /* {{{ */
 	EG(objects_store).top = fhreads_zend_objects_store_top;
 	EG(objects_store).free_list_head = fhreads_zend_objects_store_free_list_head;
 	// get next handle from orig functionality and write back to global vars for next one
-	fhreads_zend_objects_store_top = zend_objects_store_get_handle();
+	handle = zend_objects_store_get_handle();
+	fhreads_zend_objects_store_top = EG(objects_store).top;
 	fhreads_zend_objects_store_free_list_head = EG(objects_store).free_list_head;
 	// unlock it
 	pthread_mutex_unlock(&fhreads_zend_objects_store_mutex);
@@ -95,6 +96,10 @@ static void fhread_prepare_zend_objects_store()
 		EG(objects_store).size = new_objects_store_size;
 		EG(objects_store).object_buckets = (zend_object **) erealloc(EG(objects_store).object_buckets, EG(objects_store).size * sizeof(zend_object*));
 	}
+
+	// init global values
+	fhreads_zend_objects_store_top = EG(objects_store).top;
+	fhreads_zend_objects_store_free_list_head = EG(objects_store).free_list_head;
 
 	// synchronize objects store
 	zend_objects_store_get_handle_ex = fhreads_zend_objects_store_get_handle;
@@ -231,16 +236,12 @@ void fhread_init_executor(fhread_object *fhread) /* {{{ */
 	// link global tables
 	EG(included_files) = FHREADS_EG(fhread->c_tsrm_ls, included_files);
 	EG(zend_constants) = FHREADS_EG(fhread->c_tsrm_ls, zend_constants);
-
-	CG(function_table) = FHREADS_CG(fhread->c_tsrm_ls, function_table);
-	CG(class_table) = FHREADS_CG(fhread->c_tsrm_ls, class_table);
 	EG(function_table) = FHREADS_CG(fhread->c_tsrm_ls, function_table);
 	EG(class_table) = FHREADS_CG(fhread->c_tsrm_ls, class_table);
-
 	EG(regular_list) = FHREADS_EG(fhread->c_tsrm_ls, regular_list);
 	EG(persistent_list) = FHREADS_EG(fhread->c_tsrm_ls, persistent_list);
 	EG(objects_store) = FHREADS_EG(fhread->c_tsrm_ls, objects_store);
-	// EG(symbol_table) = FHREADS_EG(fhread->c_tsrm_ls, symbol_table);
+	EG(symbol_table) = FHREADS_EG(fhread->c_tsrm_ls, symbol_table);
 
 	zend_init_fpu();
 
@@ -312,6 +313,27 @@ void fhread_init(fhread_object* fhread)
 /* {{{ Run the runnable zval in given fhread context */
 void fhread_run(fhread_object* fhread)
 {
+	zval runnable;
+	zend_object* obj;
+
+	// init fhread before run it
+	fhread_init(fhread);
+
+	obj = EG(objects_store).object_buckets[fhread->runnable_handle];
+	ZVAL_OBJ(&runnable, obj);
+	Z_ADDREF(runnable);
+
+	// call run method
+	// todo: check if interface runnable was implemented...
+	zval rv;
+
+	// send signal for creator logic to go ahead
+	pthread_cond_broadcast(&fhread->notify);
+
+	zend_call_method_with_0_params(&runnable, obj->ce, NULL, "run", &rv);
+
+
+	/*
 	zval retval;
 	zend_object* obj;
 
@@ -335,6 +357,7 @@ void fhread_run(fhread_object* fhread)
 
 	// set type back to user class
 	// obj->ce->type = ZEND_USER_CLASS;
+	*/
 } /* }}} */
 
 /* {{{ The routine to call for pthread_create */
@@ -484,7 +507,7 @@ PHP_FUNCTION(fhread_create)
 	uint32_t fhreads_object_handle = fhread_object_store_put(fhread);
 	// save runnable handle from zval
 	fhread->runnable_handle = Z_OBJ_HANDLE_P(runnable);
-	fhread->runnable = runnable;
+	// fhread->runnable = runnable;
 
 	// add ref to runnable
 	Z_ADDREF_P(runnable);
