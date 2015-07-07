@@ -67,8 +67,6 @@ if ($t->start()) {
         $me->wait();
         printf("Process Done ...\n");
     }, $t);
-    
-    $t->join();
 }
 
 echo "finished script...\n";

@@ -313,51 +313,19 @@ void fhread_init(fhread_object* fhread)
 /* {{{ Run the runnable zval in given fhread context */
 void fhread_run(fhread_object* fhread)
 {
-	zval runnable;
+	zval runnable, rv;
 	zend_object* obj;
-
 	// init fhread before run it
 	fhread_init(fhread);
-
+	// get runnable from object
 	obj = EG(objects_store).object_buckets[fhread->runnable_handle];
 	ZVAL_OBJ(&runnable, obj);
-	Z_ADDREF(runnable);
-
+	// send signal for creator logic to go ahead
+	pthread_cond_broadcast(&fhread->notify);
 	// call run method
-	// todo: check if interface runnable was implemented...
-	zval rv;
-
-	// send signal for creator logic to go ahead
-	pthread_cond_broadcast(&fhread->notify);
-
 	zend_call_method_with_0_params(&runnable, obj->ce, NULL, "run", &rv);
-
-
-	/*
-	zval retval;
-	zend_object* obj;
-
-	// init fhread before run it
-	fhread_init(fhread);
-
-	// get zval from object handle
-	obj = EG(objects_store).object_buckets[fhread->runnable_handle];
-	// set type internal to no get in trouble with compiler globals arena
-	// obj->ce->type = ZEND_INTERNAL_CLASS;
-
-	// send signal for creator logic to go ahead
-	pthread_cond_broadcast(&fhread->notify);
-
-	// execute run function
-	// zend_execute((zend_op_array*) func_run, &retval);
-	zend_call_method_with_0_params(fhread->runnable, obj->ce, NULL, "run", &retval);
-
-	// destroy ret value
-	zval_ptr_dtor(&retval);
-
-	// set type back to user class
-	// obj->ce->type = ZEND_USER_CLASS;
-	*/
+	// destroy return value
+	zval_ptr_dtor(&rv);
 } /* }}} */
 
 /* {{{ The routine to call for pthread_create */
@@ -367,7 +335,6 @@ void *fhread_routine (void* ptr)
 	fhread_run(fhread_objects.object_buckets[*((uint32_t*)ptr)]);
 	// exit thread
 	pthread_exit(NULL);
-
 #ifdef _WIN32
 	return NULL; /* silence MSVC compiler */
 #endif

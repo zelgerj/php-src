@@ -44,7 +44,7 @@ $data->counter = 0;
 $ths = array();
 
 // define max threads
-$tMax = 10;
+$tMax = 1000;
 
 
 // initiate threads
@@ -57,7 +57,7 @@ for ($i = 1; $i <= $tMax; $i++) {
     $ths[$i]->start();
 }
 
-// wait for all thread to be finished by joining them
+// start threads
 for ($i = 1; $i <= $tMax; $i++) {
     $ths[$i]->join();
 }
