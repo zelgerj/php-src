@@ -52,7 +52,7 @@ PHP_INI_BEGIN()
 PHP_INI_END() /* }}} */
 
 /* {{{ Wrappes orig zend_objects_store_get_handle function to make it thread-safe */
-uint32_t fhreads_zend_objects_store_get_handle() /* {{{ */
+ZEND_API uint32_t fhreads_zend_objects_store_get_handle() /* {{{ */
 {
 	uint32_t handle;
 	// lock object store mutex
@@ -60,10 +60,8 @@ uint32_t fhreads_zend_objects_store_get_handle() /* {{{ */
 	// set global values to objects store in current context
 	EG(objects_store).top = fhreads_zend_objects_store_top;
 	EG(objects_store).free_list_head = fhreads_zend_objects_store_free_list_head;
-	// get next handle from orig functionality
-	handle = zend_objects_store_get_handle();
-	// write back to global vars for next one
-	fhreads_zend_objects_store_top = EG(objects_store).top;
+	// get next handle from orig functionality and write back to global vars for next one
+	fhreads_zend_objects_store_top = zend_objects_store_get_handle();
 	fhreads_zend_objects_store_free_list_head = EG(objects_store).free_list_head;
 	// unlock it
 	pthread_mutex_unlock(&fhreads_zend_objects_store_mutex);
@@ -72,7 +70,7 @@ uint32_t fhreads_zend_objects_store_get_handle() /* {{{ */
 } /* }}} */
 
 /* {{{ Wrappes orig fhreads_zend_objects_store_add_to_free_list function to make it thread-safe */
-void fhreads_zend_objects_store_add_to_free_list(uint32_t handle) /* {{{ */
+ZEND_API void fhreads_zend_objects_store_add_to_free_list(uint32_t handle) /* {{{ */
 {
 	// lock it
 	pthread_mutex_lock(&fhreads_zend_objects_store_mutex);
@@ -103,6 +101,11 @@ static void fhread_prepare_zend_objects_store()
 	zend_objects_store_add_to_free_list_ex = fhreads_zend_objects_store_add_to_free_list;
 } /* }}} */
 
+static void fhreads_object_free_storage(zend_object *object) /* {{{ */
+{
+	//zend_object_std_dtor(&object->std);
+} /* }}} */
+
 /* {{{ Initialises the fhread object handlers */
 static void fhread_init_object_handlers()
 {
@@ -112,7 +115,8 @@ static void fhread_init_object_handlers()
 	memcpy(&fhreads_handlers, fhreads_zend_handlers, sizeof(zend_object_handlers));
 	// override object handlers
 	// fhreads_handlers.write_property = fhread_write_property;
-	fhreads_handlers.get_gc = NULL;
+	// fhreads_handlers.get_gc = NULL;
+	// fhreads_handlers.free_obj = fhreads_object_free_storage;
 } /* }}} */
 
 /* {{{ Initialises the fhread object store */
@@ -226,11 +230,13 @@ void fhread_init_executor(fhread_object *fhread) /* {{{ */
 {
 	// link global tables
 	EG(included_files) = FHREADS_EG(fhread->c_tsrm_ls, included_files);
+	EG(zend_constants) = FHREADS_EG(fhread->c_tsrm_ls, zend_constants);
+
 	CG(function_table) = FHREADS_CG(fhread->c_tsrm_ls, function_table);
 	CG(class_table) = FHREADS_CG(fhread->c_tsrm_ls, class_table);
 	EG(function_table) = FHREADS_CG(fhread->c_tsrm_ls, function_table);
 	EG(class_table) = FHREADS_CG(fhread->c_tsrm_ls, class_table);
-	EG(zend_constants) = FHREADS_EG(fhread->c_tsrm_ls, zend_constants);
+
 	EG(regular_list) = FHREADS_EG(fhread->c_tsrm_ls, regular_list);
 	EG(persistent_list) = FHREADS_EG(fhread->c_tsrm_ls, persistent_list);
 	EG(objects_store) = FHREADS_EG(fhread->c_tsrm_ls, objects_store);
@@ -260,7 +266,7 @@ void fhread_init_executor(fhread_object *fhread) /* {{{ */
 
 	ZVAL_UNDEF(&EG(user_error_handler));
 
-	EG(current_execute_data) = (zend_execute_data*) emalloc(sizeof(zend_execute_data));
+	EG(current_execute_data) = NULL;
 
 	zend_stack_init(&EG(user_error_handlers_error_reporting), sizeof(int));
 	zend_stack_init(&EG(user_error_handlers), sizeof(zval));
@@ -306,7 +312,7 @@ void fhread_init(fhread_object* fhread)
 /* {{{ Run the runnable zval in given fhread context */
 void fhread_run(fhread_object* fhread)
 {
-	zval runnable, retval;
+	zval retval;
 	zend_object* obj;
 
 	// init fhread before run it
@@ -315,29 +321,20 @@ void fhread_run(fhread_object* fhread)
 	// get zval from object handle
 	obj = EG(objects_store).object_buckets[fhread->runnable_handle];
 	// set type internal to no get in trouble with compiler globals arena
-	obj->ce->type = ZEND_INTERNAL_CLASS;
+	// obj->ce->type = ZEND_INTERNAL_CLASS;
 
 	// send signal for creator logic to go ahead
 	pthread_cond_broadcast(&fhread->notify);
 
-	// call run method on runnable
-	zend_string *name = zend_string_init("run", sizeof("run")-1, 0);
-	zend_function *func_run = zend_hash_find_ptr(&obj->ce->function_table, name);
-
-	// prepare eg
-	EG(current_execute_data)->func = func_run;
-	EG(current_execute_data)->called_scope = obj->ce;
-	Z_OBJ(EG(current_execute_data)->This) = obj;
-	GC_REFCOUNT(obj)++;
-	EG(current_execute_data)->return_value = &retval;
-
 	// execute run function
-	zend_execute((zend_op_array*) func_run, &retval);
+	// zend_execute((zend_op_array*) func_run, &retval);
+	zend_call_method_with_0_params(fhread->runnable, obj->ce, NULL, "run", &retval);
+
 	// destroy ret value
 	zval_ptr_dtor(&retval);
 
 	// set type back to user class
-	obj->ce->type = ZEND_USER_CLASS;
+	// obj->ce->type = ZEND_USER_CLASS;
 } /* }}} */
 
 /* {{{ The routine to call for pthread_create */
@@ -478,8 +475,7 @@ PHP_FUNCTION(fhread_create)
 
 	// inject fhreads handlers
 	Z_OBJ_HT_P(runnable) = &fhreads_handlers;
-	// add ref to runnable
-	Z_ADDREF_P(runnable);
+
 	// todo: check if free fhread object is available and reuse it...
 
 	// create new fhread object
@@ -489,6 +485,9 @@ PHP_FUNCTION(fhread_create)
 	// save runnable handle from zval
 	fhread->runnable_handle = Z_OBJ_HANDLE_P(runnable);
 	fhread->runnable = runnable;
+
+	// add ref to runnable
+	Z_ADDREF_P(runnable);
 
 	// create thread and start fhread__routine
 	int pthread_status = pthread_create(&fhread->thread_id, NULL, fhread_routine, &fhreads_object_handle);
@@ -506,9 +505,6 @@ PHP_FUNCTION(fhread_create)
 
 	// wait on condition to get singal as soon as the thread is ready for take off
 	pthread_cond_wait(&fhread->notify, &fhread->syncMutex);
-
-	// add ref since its used in another context
-	Z_ADDREF_P(runnable);
 
 	// return thread status
 	RETURN_LONG((long)pthread_status);
@@ -585,7 +581,6 @@ PHP_RINIT_FUNCTION(fhreads)
 /* {{{ PHP_RSHUTDOWN_FUNCTION */
 PHP_RSHUTDOWN_FUNCTION(fhreads)
 {
-
 	return SUCCESS;
 } /* }}} */
 

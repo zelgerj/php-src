@@ -20,5 +20,3 @@ $t->start();
 var_dump($t);
 
 echo "finished script..." . PHP_EOL;
-
-

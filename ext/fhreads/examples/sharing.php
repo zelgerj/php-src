@@ -15,12 +15,11 @@ class CounterThread extends Thread
      */
     public function __construct($data)
     {
-        //$this->data = $data;
+        $this->data = $data;
     }
 
     public function run()
     {
-      /*
         // lock data object
         fhread_mutex_lock($this->data->mutex);
         // inc counter
@@ -29,20 +28,6 @@ class CounterThread extends Thread
         $this->data->objects[$this->getThreadId()] = new stdClass();
         // unlock data object
         fhread_mutex_unlock($this->data->mutex);
-        */
-        usleep(rand(0,2000));
-
-        $this->a = array();
-        $ii = 0;
-        while(1) {
-          $i = 0;
-          $this->a = array();
-          while (++$i < 100) {
-            $this->a[$i] = new stdClass();
-            usleep(10);
-          }
-          echo ".";
-        }
     }
 }
 
@@ -54,11 +39,13 @@ $data->mutex = fhread_mutex_init();
 // init counter property to be zero
 $data->counter = 0;
 
+
 // init threads array
 $ths = array();
 
 // define max threads
-$tMax = 100;
+$tMax = 10;
+
 
 // initiate threads
 for ($i = 1; $i <= $tMax; $i++) {
@@ -75,8 +62,7 @@ for ($i = 1; $i <= $tMax; $i++) {
     $ths[$i]->join();
 }
 
-// echo status
-echo "$tMax threads finished..." . PHP_EOL;
+var_dump($data);
 
 // echo status
 echo PHP_EOL . "finished script!" . PHP_EOL;
