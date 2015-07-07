@@ -102,7 +102,8 @@ abstract class Thread implements Runnable
     public function start()
     {
         // check if was started already
-        if ($this->getState() >= self::STATE_STARTED) {
+        if (($this->getState() >= self::STATE_STARTED)
+            && ($this->getState() < self::STATE_JOINED)) {
             throw new \Exception('Thread has been started already!');
         }
         $this->setState(self::STATE_STARTED);
