@@ -2,11 +2,6 @@
 Testing closure members
 --DESCRIPTION--
 This test verifies that closures can be set as members and called from anywhere
---SKIPIF--
-<?php
-if (getenv("USE_ZEND_ALLOC") === "1") {
-    die("skip Zend MM enabled");
-}
 --FILE--
 <?php
 
@@ -19,8 +14,6 @@ $test->some = function(){
 };
 
 class T extends Thread {
-    public $used = false;
-    public $set = false;
 
     public function __construct($test) {
         $this->test = $test;
@@ -31,7 +24,6 @@ class T extends Thread {
         $this->call($this->test->some);
         
         /* set new closure */
-        /*
         $this->synchronized(function($thread){
             $thread->set = true;
             $thread->test->some = function() {
@@ -39,14 +31,12 @@ class T extends Thread {
             };
             $thread->notify();
         }, $this);
-        */
+        
         /* wait for new closure execution */
-        /*
         $this->synchronized(function($thread){
             while (!$thread->used)
                 $thread->wait();
         }, $this);
-        */
     }
     
     public function call(Closure $closure) {
@@ -59,12 +49,10 @@ $t = new T($test);
 $t->start();
 
 /* wait for new closure */
-/*
 $t->synchronized(function() use($t) {
     while (!$t->set)
         $t->wait();
 });
-*/
 
 /* call new closure */
 $some = $test->some;

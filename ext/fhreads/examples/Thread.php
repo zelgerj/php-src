@@ -166,7 +166,7 @@ abstract class Thread implements Runnable
     /**
      * Joins the current thread by its thread id.
      *
-     * @return void
+     * @return boolean
      */
     public function join()
     {
@@ -179,8 +179,13 @@ abstract class Thread implements Runnable
             throw new \Exception('Thread has not been started yet!');
         }
 
-        fhread_join($this->fhreadHandle);
-        $this->setState(self::STATE_JOINED);
+        if (fhread_join($this->fhreadHandle) === 0) {
+            $this->setState(self::STATE_JOINED);
+            return true;
+        }
+        
+        $this->setState(self::STATE_ERROR);
+        return false;
     }
     
     /**
