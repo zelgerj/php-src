@@ -5,7 +5,7 @@ Test that resources and objects are not corrupted when written to thread storage
 --FILE--
 <?php
 
-include(__DIR__ . DIRECTORY_SEPARATOR . ".." . DIRECTORY_SEPARATOR . "bootstrap.inc");
+require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
 
 class Work extends Threaded {
 	public function run(){
@@ -30,13 +30,13 @@ class Test extends Thread {
 $test =new Test();
 $test->start();
 ?>
---EXPECTF--
+--EXPECT--
 Work Object
 (
 )
 object(Work)#2 (0) {
 }
-resource(%d) of type (stream)
-resource(%d) of type (stream)
+resource(2) of type (stream)
+resource(2) of type (stream)
 
 

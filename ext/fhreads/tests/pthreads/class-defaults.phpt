@@ -1,13 +1,11 @@
 --TEST--
 Test class defaults
---XFAIL--
-It is expected to fail due to compatibility to php nature
 --DESCRIPTION--
 Class defaults should now initialize defaults properly
 --FILE--
 <?php
 
-include(__DIR__ . DIRECTORY_SEPARATOR . ".." . DIRECTORY_SEPARATOR . "bootstrap.inc");
+require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
 
 class Test extends Thread {
 

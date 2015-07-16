@@ -5,7 +5,7 @@ This test verifies that reading properties from the object without var_dump/prin
 --FILE--
 <?php
 
-include(__DIR__ . DIRECTORY_SEPARATOR . ".." . DIRECTORY_SEPARATOR . "bootstrap.inc");
+require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
 
 class Test extends Thread {
 	public function run() { 

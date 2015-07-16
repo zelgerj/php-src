@@ -5,7 +5,7 @@ This tests that isset and unset are working properly
 --FILE--
 <?php
 
-include(__DIR__ . DIRECTORY_SEPARATOR . ".." . DIRECTORY_SEPARATOR . "bootstrap.inc");
+require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
 
 class Storage extends Threaded {
     public function run(){}

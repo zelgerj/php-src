@@ -5,7 +5,7 @@ This test verifies that the function table is inherited by pthreads correctly
 --FILE--
 <?php
 
-include(__DIR__ . DIRECTORY_SEPARATOR . ".." . DIRECTORY_SEPARATOR . "bootstrap.inc");
+require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
 
 function TestFunction(){
 	return __FUNCTION__;

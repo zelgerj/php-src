@@ -1,7 +1,7 @@
 --TEST--
-Testing member count
+Testing normalizing members
 --DESCRIPTION--
-This test verifies that getting member counts works without effort
+This tests that normalizing members works without effort
 --FILE--
 <?php
 
@@ -16,7 +16,10 @@ $t = new Test();
 $t[] = "one";
 $t[] = "two";
 $t["three"] = "three";
-var_dump(count($t));
+
+/* get a normal array */
+$normal = (array) $t;
+var_dump(is_array($normal));
 ?>
 --EXPECT--
-int(3)
+bool(true)

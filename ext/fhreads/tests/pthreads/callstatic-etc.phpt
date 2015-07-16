@@ -5,7 +5,7 @@ Test that the fix for bug #34 is a success
 --FILE--
 <?php
 
-include(__DIR__ . DIRECTORY_SEPARATOR . ".." . DIRECTORY_SEPARATOR . "bootstrap.inc");
+require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
 
 class Test {
     public static function __callStatic ($name, $args) {

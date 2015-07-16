@@ -1,11 +1,9 @@
 --TEST--
 Test NULLing ressources in arrays
---XFAIL--
-It is expected to fail due to compatibility to php nature
 --FILE--
 <?php
 
-include(__DIR__ . DIRECTORY_SEPARATOR . ".." . DIRECTORY_SEPARATOR . "bootstrap.inc");
+require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
 
 class file {
 	public static $fps;
