@@ -25,8 +25,61 @@
  * @link      https://github.com/appserver-io/fhreads
  * @link      http://www.appserver.io
  */
-class Threaded extends ArrayObject implements ArrayAccess, Countable
+class Threaded implements ArrayAccess, Countable
 {
+    
+    /**
+     * Assigns a value to the specified offset
+     *
+     * @param string The offset to assign the value to
+     * @param mixed  The value to set
+     * @access public
+     * @abstracting ArrayAccess
+     */
+    public function offsetSet($offset, $value) {
+        if (is_null($offset)) {
+            $offset = 0;
+            while(in_array("$offset", array_keys((array)$this))) { ++$offset; }
+        }
+        $this->{"$offset"} = $value;
+    }
+    
+    /**
+     * Whether or not an offset exists
+     *
+     * @param string An offset to check for
+     * @access public
+     * @return boolean
+     * @abstracting ArrayAccess
+     */
+    public function offsetExists($offset) {
+        return isset($this->{"$offset"});
+    }
+    
+    /**
+     * Unsets an offset
+     *
+     * @param string The offset to unset
+     * @access public
+     * @abstracting ArrayAccess
+     */
+    public function offsetUnset($offset) {
+        if ($this->offsetExists($offset)) {
+            unset($this->{"$offset"});
+        }
+    }
+    
+    /**
+     * Returns the value at specified offset
+     *
+     * @param string The offset to retrieve
+     * @access public
+     * @return mixed
+     * @abstracting ArrayAccess
+     */
+    public function offsetGet($offset) {
+        return $this->offsetExists($offset) ? $this->{"$offset"} : null;
+    }
     
     /**
      * Fetches a chunk of the objects properties table of the given size
@@ -39,6 +92,14 @@ class Threaded extends ArrayObject implements ArrayAccess, Countable
     public function chunk($size)
     {
         return array_slice((array)$this, 0, $size);
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function count()
+    {
+        return count((array)$this);
     }
 
     /**
@@ -93,12 +154,18 @@ class Threaded extends ArrayObject implements ArrayAccess, Countable
     public function merge($from, $overwrite = true)
     {
         foreach($from as $fromKey => $fromValue) {
-            if (isset($this[$fromKey])&&($overwrite === false)) {
+            if ((isset($this->{$fromKey}))&&($overwrite === false)) {
                 continue;
-            }            
-            $this[$fromKey] = $fromValue;
+            }
+            $this->{$fromKey} = $fromValue;
         }
     }
+    
+    public function next() {}
+    public function current() {}
+    public function key() {}
+    public function valid() {}
+    public function rewind() {}
 
     /**
      * Send notification to the referenced object
