@@ -69,7 +69,7 @@ abstract class Thread implements Runnable
      *
      * @var int
      */
-    protected $mutex = null;
+    protected $globalMutex = null;
     protected $stateMutex = null;
     protected $syncMutex = null;
     
@@ -110,7 +110,7 @@ abstract class Thread implements Runnable
         // init thread cond
         $this->syncNotify = fhread_cond_init();
         // init thread mutex
-        $this->mutex = fhread_mutex_init();
+        $this->globalMutex = fhread_mutex_init();
         $this->stateMutex = fhread_mutex_init();
         $this->syncMutex = fhread_mutex_init();
         // create, start thread and save thread id

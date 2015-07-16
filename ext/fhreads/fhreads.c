@@ -353,7 +353,7 @@ PHP_FUNCTION(fhread_mutex_destroy)
 {
 	pthread_mutex_t *mutex;
 	if (zend_parse_parameters(ZEND_NUM_ARGS(), "l", &mutex)==SUCCESS && mutex) {
-		pthread_mutex_destroy(mutex);
+		RETURN_LONG(pthread_mutex_destroy(mutex));
 	}
 } /* }}} */
 
@@ -372,7 +372,7 @@ PHP_FUNCTION(fhread_mutex_lock)
 {
 	pthread_mutex_t *mutex;
 	if (zend_parse_parameters(ZEND_NUM_ARGS(), "l", &mutex)==SUCCESS && mutex) {
-		pthread_mutex_lock(mutex);
+		RETURN_LONG(pthread_mutex_lock(mutex));
 	}
 } /* }}} */
 
@@ -381,7 +381,7 @@ PHP_FUNCTION(fhread_mutex_unlock)
 {
 	pthread_mutex_t *mutex;
 	if (zend_parse_parameters(ZEND_NUM_ARGS(), "l", &mutex)==SUCCESS && mutex) {
-		pthread_mutex_unlock(mutex);
+		RETURN_LONG(pthread_mutex_unlock(mutex));
 	}
 } /* }}} */
 
@@ -390,7 +390,7 @@ PHP_FUNCTION(fhread_cond_broadcast)
 {
 	pthread_cond_t *cond;
 	if (zend_parse_parameters(ZEND_NUM_ARGS(), "l", &cond)==SUCCESS && cond) {
-		pthread_cond_broadcast(cond);
+		RETURN_LONG(pthread_cond_broadcast(cond));
 	}
 } /* }}} */
 
@@ -399,7 +399,7 @@ PHP_FUNCTION(fhread_cond_destroy)
 {
 	pthread_cond_t *cond;
 	if (zend_parse_parameters(ZEND_NUM_ARGS(), "l", &cond)==SUCCESS && cond) {
-		pthread_cond_destroy(cond);
+		RETURN_LONG(pthread_cond_destroy(cond));
 	}
 } /* }}} */
 
@@ -419,7 +419,7 @@ PHP_FUNCTION(fhread_cond_signal)
 {
 	pthread_cond_t *cond;
 	if (zend_parse_parameters(ZEND_NUM_ARGS(), "l", &cond)==SUCCESS && cond) {
-		pthread_cond_signal(cond);
+		RETURN_LONG(pthread_cond_signal(cond));
 	}
 } /* }}} */
 
@@ -429,7 +429,7 @@ PHP_FUNCTION(fhread_cond_wait)
 	pthread_cond_t *cond;
 	pthread_mutex_t *mutex;
 	if (zend_parse_parameters(ZEND_NUM_ARGS(), "ll", &cond, &mutex)==SUCCESS && cond  && mutex) {
-		pthread_cond_wait(cond, mutex);
+		RETURN_LONG(pthread_cond_wait(cond, mutex));
 	}
 } /* }}} */
 
