@@ -13,7 +13,7 @@ class Test extends Thread {
 		var_dump($this);
 	}
 	
-	protected $string = "hello world";
+	public $string = "hello world";
 	protected $array  = array(1, 2, 3);
 	private $pstring  = "world hello";
 	private $parray   = array(3, 2, 1);
@@ -25,11 +25,11 @@ $test->string = strrev($test->string);
 $test->start();
 $test->join();
 ?>
---EXPECT--
-object(Test)#1 (4) {
+--EXPECTF--
+object(Test)#1 (%d) {
   ["string"]=>
   string(11) "dlrow olleh"
-  ["array"]=>
+  ["array":protected]=>
   array(3) {
     [0]=>
     int(1)
@@ -38,9 +38,9 @@ object(Test)#1 (4) {
     [2]=>
     int(3)
   }
-  ["pstring"]=>
+  ["pstring":"Test":private]=>
   string(11) "world hello"
-  ["parray"]=>
+  ["parray":"Test":private]=>
   array(3) {
     [0]=>
     int(3)
@@ -49,5 +49,19 @@ object(Test)#1 (4) {
     [2]=>
     int(1)
   }
+  ["threadId":protected]=>
+  %s(%d)
+  ["fhreadHandle":protected]=>
+  %s(%d)
+  ["mutex":protected]=>
+  int(%d)
+  ["stateMutex":protected]=>
+  int(%d)
+  ["syncMutex":protected]=>
+  int(%d)
+  ["syncNotify":protected]=>
+  int(%d)
+  ["state":protected]=>
+  int(%d)
 }
 

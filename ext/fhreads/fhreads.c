@@ -234,6 +234,7 @@ void fhread_init_compiler(fhread_object *fhread) /* {{{ */
 void fhread_init_executor(fhread_object *fhread) /* {{{ */
 {
 	// link global tables
+	CG(function_table) = FHREADS_CG(fhread->c_tsrm_ls, function_table);
 	EG(included_files) = FHREADS_EG(fhread->c_tsrm_ls, included_files);
 	EG(zend_constants) = FHREADS_EG(fhread->c_tsrm_ls, zend_constants);
 	EG(function_table) = FHREADS_CG(fhread->c_tsrm_ls, function_table);

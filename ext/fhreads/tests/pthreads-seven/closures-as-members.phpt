@@ -10,16 +10,19 @@ require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
 $test = new Threaded();
 
 $test->some = function(){
-    echo "Hello Some\n";
+    echo "Hello Some" . PHP_EOL;
 };
 
 class T extends Thread {
+    public $set = false;
+    public $used = false;
 
     public function __construct($test) {
         $this->test = $test;
     }
     
     public function run() {
+
         /* call original closure */
         $this->call($this->test->some);
         
@@ -27,10 +30,11 @@ class T extends Thread {
         $this->synchronized(function($thread){
             $thread->set = true;
             $thread->test->some = function() {
-                echo "Hello World\n";
+                echo PHP_EOL;
+                echo "Hello World" . PHP_EOL;
             };
             $thread->notify();
-        }, $this);
+        });
         
         /* wait for new closure execution */
         $this->synchronized(function($thread){
@@ -53,7 +57,7 @@ $t->synchronized(function() use($t) {
     while (!$t->set)
         $t->wait();
 });
-
+    
 /* call new closure */
 $some = $test->some;
 $some();

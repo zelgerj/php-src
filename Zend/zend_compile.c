@@ -1012,6 +1012,7 @@ ZEND_API int do_bind_function(const zend_op_array *op_array, const zend_op *opli
 	}
 
 	function = zend_hash_find_ptr(function_table, Z_STR_P(op1));
+
 	new_function = zend_arena_alloc(&CG(arena), sizeof(zend_op_array));
 	memcpy(new_function, function, sizeof(zend_op_array));
 	if (zend_hash_add_ptr(function_table, Z_STR_P(op2), new_function) == NULL) {
@@ -1034,6 +1035,7 @@ ZEND_API int do_bind_function(const zend_op_array *op_array, const zend_op *opli
 			(*function->op_array.refcount)++;
 		}
 		function->op_array.static_variables = NULL; /* NULL out the unbound function */
+
 		return SUCCESS;
 	}
 }
