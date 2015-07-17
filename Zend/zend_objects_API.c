@@ -28,7 +28,7 @@
 ZEND_API uint32_t (*zend_objects_store_get_handle_ex)();
 ZEND_API void (*zend_objects_store_add_to_free_list_ex)(uint32_t handle);
 
-ZEND_API uint32_t zend_objects_store_get_handle() /* {{{ */
+ZEND_API uint32_t zend_objects_store_get_handle()
 {
 	uint32_t handle;
 
@@ -44,14 +44,13 @@ ZEND_API uint32_t zend_objects_store_get_handle() /* {{{ */
 	}
 
 	return handle;
-} /* }}} */
+}
 
-ZEND_API void zend_objects_store_add_to_free_list(uint32_t handle) /* {{{ */
+ZEND_API void zend_objects_store_add_to_free_list(uint32_t handle)
 {
 	SET_OBJ_BUCKET_NUMBER(EG(objects_store).object_buckets[handle], EG(objects_store).free_list_head);
 	EG(objects_store).free_list_head = handle;
 }
-/* }}} */
 
 ZEND_API void zend_objects_store_init(zend_objects_store *objects, uint32_t init_size)
 {
@@ -60,7 +59,8 @@ ZEND_API void zend_objects_store_init(zend_objects_store *objects, uint32_t init
 	objects->size = init_size;
 	objects->free_list_head = -1;
 	memset(&objects->object_buckets[0], 0, sizeof(zend_object*));
-	// set zend default functions
+
+	// set default zend functions
 	zend_objects_store_get_handle_ex = zend_objects_store_get_handle;
 	zend_objects_store_add_to_free_list_ex = zend_objects_store_add_to_free_list;
 }
@@ -80,7 +80,7 @@ ZEND_API void zend_objects_store_call_destructors(zend_objects_store *objects)
 		do {
 			zend_object *obj = *obj_ptr;
 
-			if (obj && IS_OBJ_VALID(obj)) {
+			if (IS_OBJ_VALID(obj)) {
 				if (!(GC_FLAGS(obj) & IS_OBJ_DESTRUCTOR_CALLED)) {
 					GC_FLAGS(obj) |= IS_OBJ_DESTRUCTOR_CALLED;
 					GC_REFCOUNT(obj)++;
