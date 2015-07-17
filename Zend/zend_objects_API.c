@@ -60,7 +60,7 @@ ZEND_API void zend_objects_store_init(zend_objects_store *objects, uint32_t init
 	objects->size = init_size;
 	objects->free_list_head = -1;
 	memset(&objects->object_buckets[0], 0, sizeof(zend_object*));
-
+	// set zend default functions
 	zend_objects_store_get_handle_ex = zend_objects_store_get_handle;
 	zend_objects_store_add_to_free_list_ex = zend_objects_store_add_to_free_list;
 }
