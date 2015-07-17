@@ -53,7 +53,7 @@ object(Test)#1 (%d) {
   %s(%d)
   ["fhreadHandle":protected]=>
   %s(%d)
-  ["mutex":protected]=>
+  ["globalMutex":protected]=>
   int(%d)
   ["stateMutex":protected]=>
   int(%d)

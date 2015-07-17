@@ -189,6 +189,30 @@ abstract class Thread implements Runnable
     }
     
     /**
+     * Detaches the current thread by its thread id.
+     *
+     * @return boolean
+     */
+    public function detach()
+    {
+        // check if was started already
+        if ($this->getState() >= self::STATE_JOINED) {
+            return;
+        }
+        // only if thread was started before
+        if ($this->getState() < self::STATE_STARTED) {
+            throw new \Exception('Thread has not been started yet!');
+        }
+    
+        if (fhread_detach($this->fhreadHandle) === 0) {
+            return true;
+        }
+    
+        $this->setState(self::STATE_ERROR);
+        return false;
+    }
+    
+    /**
      * Returns wheater the thread is in waiting state or not
      * 
      * @return bool

@@ -66,10 +66,7 @@ extern zend_module_entry fhreads_module_entry;
 #include <Zend/zend_closures.h>
 #include <Zend/zend_generators.h>
 #include <Zend/zend_vm.h>
-
-#ifdef ZTS
-#include "TSRM.h"
-#endif
+#include <TSRM/TSRM.h>
 
 typedef struct _fhread_object {
 	pthread_t thread_id;

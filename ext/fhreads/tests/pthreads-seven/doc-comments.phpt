@@ -39,6 +39,8 @@ $t = new T();
 $t->start();
 $t->join();
 
+echo "\r";
+
 $reflect = new ReflectionMethod("T", "run");
 var_dump($reflect);
 var_dump($reflect->getDocComment());

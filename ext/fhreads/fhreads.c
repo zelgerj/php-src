@@ -204,6 +204,7 @@ uint32_t fhread_object_store_put(fhread_object *object)
 /* {{{ Creates and returns new fhread object */
 static fhread_object* fhread_object_create()
 {
+	TSRMLS_CACHE_UPDATE();
 	// prepare fhread
 	fhread_object* fhread = emalloc(sizeof(fhread_object));
 	// init is joined flag
@@ -213,7 +214,10 @@ static fhread_object* fhread_object_create()
 	// set thread_id
 	fhread->thread_id = tsrm_thread_id();
 	// set creator tsrm ls
-	fhread->c_tsrm_ls = tsrm_get_ls_cache();
+	fhread->c_tsrm_ls = TSRMLS_CACHE;
+	// create new interpreter context
+	// fhread->tsrm_ls = tsrm_new_interpreter_context();
+
 	// init internal condition
 	pthread_cond_init(&fhread->notify, NULL);
 	// init internal mutexe and lock it per default
@@ -233,7 +237,7 @@ void fhread_init_compiler(fhread_object *fhread) /* {{{ */
 /* {{{ Initialises the executor in fhreads context */
 void fhread_init_executor(fhread_object *fhread) /* {{{ */
 {
-	// link global tables
+	// link global stuff
 	CG(function_table) = FHREADS_CG(fhread->c_tsrm_ls, function_table);
 	EG(included_files) = FHREADS_EG(fhread->c_tsrm_ls, included_files);
 	EG(zend_constants) = FHREADS_EG(fhread->c_tsrm_ls, zend_constants);
@@ -247,7 +251,9 @@ void fhread_init_executor(fhread_object *fhread) /* {{{ */
 	zend_init_fpu();
 
 	ZVAL_NULL(&EG(uninitialized_zval));
+
 	ZVAL_NULL(&EG(error_zval));
+
 	// destroys stack frame, therefore makes core dumps worthless
 #if 0&&ZEND_DEBUG
 	original_sigsegv_handler = signal(SIGSEGV, zend_handle_sigsegv);
@@ -274,6 +280,7 @@ void fhread_init_executor(fhread_object *fhread) /* {{{ */
 	zend_stack_init(&EG(user_error_handlers), sizeof(zval));
 	zend_stack_init(&EG(user_exception_handlers), sizeof(zval));
 
+
 	EG(full_tables_cleanup) = 0;
 	#ifdef ZEND_WIN32
 		EG(timed_out) = 0;
@@ -294,12 +301,14 @@ void fhread_init_executor(fhread_object *fhread) /* {{{ */
 /* {{{ Initialises the fhreads context */
 void fhread_init(fhread_object* fhread)
 {
+	TSRMLS_CACHE_UPDATE();
+
 	// check if initialization is needed
 	if (fhread->is_initialized != 1) {
 		// create new interpreter context
-		void ***tsrm_ls = fhread->tsrm_ls = tsrm_new_interpreter_context();
+		TSRMLS_CACHE = fhread->tsrm_ls = tsrm_new_interpreter_context();
 		// set prepared thread ls
-		tsrm_set_interpreter_context(tsrm_ls);
+		tsrm_set_interpreter_context(TSRMLS_CACHE);
 		// link server context
 		SG(server_context) = FHREADS_SG(fhread->c_tsrm_ls, server_context);
 		// init compiler
@@ -323,8 +332,34 @@ void fhread_run(fhread_object* fhread)
 	ZVAL_OBJ(&runnable, obj);
 	// send signal for creator logic to go ahead
 	pthread_cond_broadcast(&fhread->notify);
+
 	// call run method
-	zend_call_method_with_0_params(&runnable, obj->ce, NULL, "run", &rv);
+	// zend_call_method_with_0_params(&runnable, obj->ce, NULL, "run", &rv);
+
+	zend_function *fun;
+	zend_fcall_info fci = empty_fcall_info;
+	zend_fcall_info_cache fcc = empty_fcall_info_cache;
+	zend_string *method = zend_string_init(ZEND_STRL("run"), 0);
+
+	if ((fun = zend_hash_find_ptr(&Z_OBJCE(runnable)->function_table, method))) {
+		if (fun->type == ZEND_USER_FUNCTION) {
+			ZVAL_STR(&fci.function_name, method);
+			fci.size = sizeof(zend_fcall_info);
+			fci.retval = &rv;
+			fci.object = Z_OBJ(runnable);
+			fci.no_separation = 1;
+			fcc.initialized = 1;
+			fcc.object = Z_OBJ(runnable);
+			fcc.calling_scope = Z_OBJCE(runnable);
+			fcc.called_scope = Z_OBJCE(runnable);
+			fcc.function_handler = fun;
+
+			EG(scope) = Z_OBJCE(runnable);
+
+			zend_call_function(&fci, &fcc);
+		}
+	}
+
 	// destroy return value
 	zval_ptr_dtor(&rv);
 } /* }}} */
@@ -529,6 +564,35 @@ PHP_FUNCTION(fhread_join)
 	RETURN_LONG((long)status);
 } /* }}} */
 
+/* {{{ proto fhread_detach()
+   Marks the thread identified by thread
+   as detached.  When a detached thread terminates, its resources are
+   automatically released back to the system without the need for
+   another thread to join with the terminated thread.*/
+PHP_FUNCTION(fhread_detach)
+{
+	uint32_t fhread_handle;
+	fhread_object* fhread;
+	int status;
+
+	// parse thread id for thread to join to
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "l", &fhread_handle) == FAILURE) {
+		RETURN_NULL();
+	}
+
+	// get fhread object
+	fhread = fhread_objects.object_buckets[fhread_handle];
+
+	// join thread if not done yet
+	if (fhread->is_joined == 0) {
+		fhread->is_joined = 1;
+		status = pthread_detach(fhread->thread_id);
+	}
+
+	// return status
+	RETURN_LONG((long)status);
+}
+
 /* {{{ PHP_MINIT_FUNCTION */
 PHP_MINIT_FUNCTION(fhreads)
 {
@@ -595,6 +659,7 @@ const zend_function_entry fhreads_functions[] = {
 	PHP_FE(fhread_self, 					NULL)
 	PHP_FE(fhread_create, 					arginfo_fhread_create)
 	PHP_FE(fhread_join, 					NULL)
+	PHP_FE(fhread_detach, 					NULL)
 	PHP_FE(fhread_mutex_init, 				NULL)
 	PHP_FE(fhread_mutex_lock, 				NULL)
 	PHP_FE(fhread_mutex_unlock,				NULL)
