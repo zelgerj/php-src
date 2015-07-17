@@ -181,6 +181,7 @@ ZEND_API void zend_cleanup_internal_class_data(zend_class_entry *ce)
 #else
 		ce->static_members_table = NULL;
 #endif
+		ce->ce_flags &= ~ZEND_ACC_CONSTANTS_UPDATED;
 		while (p != end) {
 			i_zval_ptr_dtor(p ZEND_FILE_LINE_CC);
 			p++;
@@ -667,6 +668,20 @@ static void zend_resolve_finally_ret(zend_op_array *op_array, uint32_t op_num)
 	}
 }
 
+static uint32_t zend_get_brk_cont_target(const zend_op_array *op_array, const zend_op *opline) {
+	int nest_levels = opline->op2.num;
+	int array_offset = opline->op1.num;
+	zend_brk_cont_element *jmp_to;
+	do {
+		jmp_to = &op_array->brk_cont_array[array_offset];
+		if (nest_levels > 1) {
+			array_offset = jmp_to->parent;
+		}
+	} while (--nest_levels > 0);
+
+	return opline->opcode == ZEND_BRK ? jmp_to->brk : jmp_to->cont;
+}
+
 static void zend_resolve_finally_calls(zend_op_array *op_array)
 {
 	uint32_t i, j;
@@ -682,22 +697,8 @@ static void zend_resolve_finally_calls(zend_op_array *op_array)
 				break;
 			case ZEND_BRK:
 			case ZEND_CONT:
-			{
-				int nest_levels, array_offset;
-				zend_brk_cont_element *jmp_to;
-
-				nest_levels = Z_LVAL(op_array->literals[opline->op2.constant]);
-				if ((array_offset = opline->op1.opline_num) != -1) {
-					do {
-						jmp_to = &op_array->brk_cont_array[array_offset];
-						if (nest_levels > 1) {
-							array_offset = jmp_to->parent;
-						}
-					} while (--nest_levels > 0);
-					zend_resolve_finally_call(op_array, i, opline->opcode == ZEND_BRK ? jmp_to->brk : jmp_to->cont);
-					break;
-				}
-			}
+				zend_resolve_finally_call(op_array, i, zend_get_brk_cont_target(op_array, opline));
+				break;
 			case ZEND_GOTO:
 				if (Z_TYPE_P(CT_CONSTANT_EX(op_array, opline->op2.constant)) != IS_LONG) {
 					uint32_t num = opline->op2.constant;
@@ -775,6 +776,16 @@ ZEND_API int pass_two(zend_op_array *op_array)
 			case ZEND_DECLARE_INHERITED_CLASS_DELAYED:
 				opline->extended_value = (uint32_t)(zend_intptr_t)ZEND_CALL_VAR_NUM(NULL, op_array->last_var + opline->extended_value);
 				break;
+			case ZEND_BRK:
+			case ZEND_CONT:
+				{
+					uint32_t jmp_target = zend_get_brk_cont_target(op_array, opline);
+					opline->opcode = ZEND_JMP;
+					opline->op1.opline_num = jmp_target;
+					opline->op2.num = 0;
+					ZEND_PASS_TWO_UPDATE_JMP_TARGET(op_array, opline, opline->op1);
+				}
+				break;
 			case ZEND_GOTO:
 				if (Z_TYPE_P(RT_CONSTANT(op_array, opline->op2)) != IS_LONG) {
 					zend_resolve_goto_label(op_array, opline, 1);
@@ -798,10 +809,12 @@ ZEND_API int pass_two(zend_op_array *op_array)
 			case ZEND_NEW:
 			case ZEND_FE_RESET_R:
 			case ZEND_FE_RESET_RW:
-			case ZEND_FE_FETCH_R:
-			case ZEND_FE_FETCH_RW:
 			case ZEND_ASSERT_CHECK:
 				ZEND_PASS_TWO_UPDATE_JMP_TARGET(op_array, opline, opline->op2);
+				break;
+			case ZEND_FE_FETCH_R:
+			case ZEND_FE_FETCH_RW:
+				opline->extended_value = ZEND_OPLINE_NUM_TO_OFFSET(op_array, opline, opline->extended_value);
 				break;
 			case ZEND_VERIFY_RETURN_TYPE:
 				if (op_array->fn_flags & ZEND_ACC_GENERATOR) {
@@ -830,9 +843,9 @@ int pass_two_wrapper(zval *el)
 
 int print_class(zend_class_entry *class_entry)
 {
-	printf("Class %s:\n", class_entry->name->val);
+	printf("Class %s:\n", ZSTR_VAL(class_entry->name));
 	zend_hash_apply(&class_entry->function_table, pass_two_wrapper);
-	printf("End of class %s.\n\n", class_entry->name->val);
+	printf("End of class %s.\n\n", ZSTR_VAL(class_entry->name));
 	return 0;
 }
 

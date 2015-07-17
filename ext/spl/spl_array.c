@@ -278,7 +278,7 @@ static zval *spl_array_get_dimension_ptr(int check_inherited, zval *object, zval
 
 	switch (Z_TYPE_P(offset)) {
 	case IS_NULL:
-	   offset_key = STR_EMPTY_ALLOC();
+	   offset_key = ZSTR_EMPTY_ALLOC();
 	   goto fetch_dim_string;
 	case IS_STRING:
 	   offset_key = Z_STR_P(offset);
@@ -290,13 +290,13 @@ fetch_dim_string:
 				if (Z_TYPE_P(retval) == IS_UNDEF) {
 					switch (type) {
 						case BP_VAR_R:
-							zend_error(E_NOTICE, "Undefined index: %s", offset_key->val);
+							zend_error(E_NOTICE, "Undefined index: %s", ZSTR_VAL(offset_key));
 						case BP_VAR_UNSET:
 						case BP_VAR_IS:
 							retval = &EG(uninitialized_zval);
 							break;
 						case BP_VAR_RW:
-							zend_error(E_NOTICE,"Undefined index: %s", offset_key->val);
+							zend_error(E_NOTICE,"Undefined index: %s", ZSTR_VAL(offset_key));
 						case BP_VAR_W: {
 							ZVAL_NULL(retval);
 						}
@@ -306,13 +306,13 @@ fetch_dim_string:
 		} else {
 			switch (type) {
 				case BP_VAR_R:
-					zend_error(E_NOTICE, "Undefined index: %s", offset_key->val);
+					zend_error(E_NOTICE, "Undefined index: %s", ZSTR_VAL(offset_key));
 				case BP_VAR_UNSET:
 				case BP_VAR_IS:
 					retval = &EG(uninitialized_zval);
 					break;
 				case BP_VAR_RW:
-					zend_error(E_NOTICE,"Undefined index: %s", offset_key->val);
+					zend_error(E_NOTICE,"Undefined index: %s", ZSTR_VAL(offset_key));
 				case BP_VAR_W: {
 				    zval value;
 					ZVAL_NULL(&value);
@@ -710,7 +710,8 @@ SPL_METHOD(Array, offsetGet)
 	}
 	value = spl_array_read_dimension_ex(0, getThis(), index, BP_VAR_R, return_value);
 	if (value != return_value) {
-		RETURN_ZVAL(value, 1, 0);
+		ZVAL_DEREF(value);
+		ZVAL_COPY(return_value, value);
 	}
 } /* }}} */
 
@@ -737,7 +738,7 @@ void spl_array_iterator_append(zval *object, zval *append_value) /* {{{ */
 	}
 
 	if (spl_array_is_object(intern)) {
-		php_error_docref(NULL, E_RECOVERABLE_ERROR, "Cannot append properties to objects, use %s::offsetSet() instead", Z_OBJCE_P(object)->name->val);
+		php_error_docref(NULL, E_RECOVERABLE_ERROR, "Cannot append properties to objects, use %s::offsetSet() instead", ZSTR_VAL(Z_OBJCE_P(object)->name));
 		return;
 	}
 
@@ -831,12 +832,21 @@ static HashTable* spl_array_get_debug_info(zval *obj, int *is_temp) /* {{{ */
 }
 /* }}} */
 
+static HashTable *spl_array_get_gc(zval *obj, zval **gc_data, int *gc_data_count) /* {{{ */
+{
+	spl_array_object *intern = Z_SPLARRAY_P(obj);
+	*gc_data = &intern->array;
+	*gc_data_count = 1;
+	return zend_std_get_properties(obj);
+}
+/* }}} */
+
 static zval *spl_array_read_property(zval *object, zval *member, int type, void **cache_slot, zval *rv) /* {{{ */
 {
 	spl_array_object *intern = Z_SPLARRAY_P(object);
 
 	if ((intern->ar_flags & SPL_ARRAY_ARRAY_AS_PROPS) != 0
-		&& !std_object_handlers.has_property(object, member, 2, cache_slot)) {
+		&& !std_object_handlers.has_property(object, member, 2, NULL)) {
 		return spl_array_read_dimension(object, member, type, rv);
 	}
 	return std_object_handlers.read_property(object, member, type, cache_slot, rv);
@@ -847,7 +857,7 @@ static void spl_array_write_property(zval *object, zval *member, zval *value, vo
 	spl_array_object *intern = Z_SPLARRAY_P(object);
 
 	if ((intern->ar_flags & SPL_ARRAY_ARRAY_AS_PROPS) != 0
-	&& !std_object_handlers.has_property(object, member, 2, cache_slot)) {
+	&& !std_object_handlers.has_property(object, member, 2, NULL)) {
 		spl_array_write_dimension(object, member, value);
 		return;
 	}
@@ -859,7 +869,7 @@ static zval *spl_array_get_property_ptr_ptr(zval *object, zval *member, int type
 	spl_array_object *intern = Z_SPLARRAY_P(object);
 
 	if ((intern->ar_flags & SPL_ARRAY_ARRAY_AS_PROPS) != 0
-		&& !std_object_handlers.has_property(object, member, 2, cache_slot)) {
+		&& !std_object_handlers.has_property(object, member, 2, NULL)) {
 		return spl_array_get_dimension_ptr(1, object, member, type);
 	}
 	//!!! FIXME
@@ -872,7 +882,7 @@ static int spl_array_has_property(zval *object, zval *member, int has_set_exists
 	spl_array_object *intern = Z_SPLARRAY_P(object);
 
 	if ((intern->ar_flags & SPL_ARRAY_ARRAY_AS_PROPS) != 0
-		&& !std_object_handlers.has_property(object, member, 2, cache_slot)) {
+		&& !std_object_handlers.has_property(object, member, 2, NULL)) {
 		return spl_array_has_dimension(object, member, has_set_exists);
 	}
 	return std_object_handlers.has_property(object, member, has_set_exists, cache_slot);
@@ -883,7 +893,7 @@ static void spl_array_unset_property(zval *object, zval *member, void **cache_sl
 	spl_array_object *intern = Z_SPLARRAY_P(object);
 
 	if ((intern->ar_flags & SPL_ARRAY_ARRAY_AS_PROPS) != 0
-		&& !std_object_handlers.has_property(object, member, 2, cache_slot)) {
+		&& !std_object_handlers.has_property(object, member, 2, NULL)) {
 		spl_array_unset_dimension(object, member);
 		return;
 	}
@@ -927,7 +937,7 @@ static int spl_array_skip_protected(spl_array_object *intern, HashTable *aht) /*
 				if (data && Z_TYPE_P(data) == IS_INDIRECT &&
 				    Z_TYPE_P(data = Z_INDIRECT_P(data)) == IS_UNDEF) {
 					/* skip */
-				} else if (!string_key->len || string_key->val[0]) {
+				} else if (!ZSTR_LEN(string_key) || ZSTR_VAL(string_key)[0]) {
 					return SUCCESS;
 				}
 			} else {
@@ -1504,7 +1514,8 @@ SPL_METHOD(Array, current)
 			return;
 		}
 	}
-	RETVAL_ZVAL(entry, 1, 0);
+	ZVAL_DEREF(entry);
+	ZVAL_COPY(return_value, entry);
 }
 /* }}} */
 
@@ -1621,7 +1632,9 @@ SPL_METHOD(Array, getChildren)
 			return;
 		}
 		if (instanceof_function(Z_OBJCE_P(entry), Z_OBJCE_P(getThis()))) {
-			RETURN_ZVAL(entry, 1, 0);
+			ZVAL_OBJ(return_value, Z_OBJ_P(entry));
+			Z_ADDREF_P(return_value);
+			return;
 		}
 	}
 
@@ -1913,6 +1926,7 @@ PHP_MINIT_FUNCTION(spl_array)
 
 	spl_handler_ArrayObject.get_properties = spl_array_get_properties;
 	spl_handler_ArrayObject.get_debug_info = spl_array_get_debug_info;
+	spl_handler_ArrayObject.get_gc = spl_array_get_gc;
 	spl_handler_ArrayObject.read_property = spl_array_read_property;
 	spl_handler_ArrayObject.write_property = spl_array_write_property;
 	spl_handler_ArrayObject.get_property_ptr_ptr = spl_array_get_property_ptr_ptr;

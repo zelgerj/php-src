@@ -235,7 +235,8 @@ PHP_FUNCTION(curl_multi_exec)
 		}
 	}
 
-	still_running = zval_get_long(z_still_running);
+	convert_to_long(z_still_running);
+	still_running = Z_LVAL_P(z_still_running);
 	result = curl_multi_perform(mh->multi, &still_running);
 	ZVAL_LONG(z_still_running, still_running);
 
@@ -368,8 +369,9 @@ void _php_curl_multi_close(zend_resource *rsrc) /* {{{ */
 			pz_ch = (zval *)zend_llist_get_next_ex(&mh->easyh, &pos)) {
 			/* ptr is NULL means it already be freed */
 			if (Z_RES_P(pz_ch)->ptr) {
-				ch = (php_curl *) zend_fetch_resource(Z_RES_P(pz_ch), le_curl_name, le_curl);
-				_php_curl_verify_handlers(ch, 0);
+				if ((ch = (php_curl *) zend_fetch_resource(Z_RES_P(pz_ch), le_curl_name, le_curl))) {
+					_php_curl_verify_handlers(ch, 0);
+				}
 			}
 		}
 

@@ -327,7 +327,8 @@ again:
 	return result;
 }
 
-ZEND_API int compare_function(zval *result, zval *op1, zval *op2);
+ZEND_API int ZEND_FASTCALL compare_function(zval *result, zval *op1, zval *op2);
+ZEND_API int zval_compare_function(zval *result, zval *op1, zval *op2);
 ZEND_API int numeric_compare_function(zval *result, zval *op1, zval *op2);
 ZEND_API int string_compare_function_ex(zval *result, zval *op1, zval *op2, zend_bool case_insensitive);
 ZEND_API int string_compare_function(zval *result, zval *op1, zval *op2);
@@ -339,6 +340,7 @@ ZEND_API int string_locale_compare_function(zval *result, zval *op1, zval *op2);
 ZEND_API void         ZEND_FASTCALL zend_str_tolower(char *str, size_t length);
 ZEND_API char*        ZEND_FASTCALL zend_str_tolower_copy(char *dest, const char *source, size_t length);
 ZEND_API char*        ZEND_FASTCALL zend_str_tolower_dup(const char *source, size_t length);
+ZEND_API char*        ZEND_FASTCALL zend_str_tolower_dup_ex(const char *source, size_t length);
 ZEND_API zend_string* ZEND_FASTCALL zend_string_tolower(zend_string *str);
 
 ZEND_API int ZEND_FASTCALL zend_binary_zval_strcmp(zval *s1, zval *s2);
@@ -364,7 +366,6 @@ ZEND_API void ZEND_FASTCALL zend_locale_sprintf_double(zval *op ZEND_FILE_LINE_D
 
 #define convert_to_ex_master(pzv, lower_type, upper_type)	\
 	if (Z_TYPE_P(pzv)!=upper_type) {					\
-		SEPARATE_ZVAL_IF_NOT_REF(pzv);						\
 		convert_to_##lower_type(pzv);						\
 	}
 
@@ -400,7 +401,6 @@ ZEND_API void ZEND_FASTCALL zend_locale_sprintf_double(zval *op ZEND_FILE_LINE_D
 
 #define convert_to_explicit_type_ex(pzv, str_type)	\
 	if (Z_TYPE_P(pzv) != str_type) {				\
-		SEPARATE_ZVAL_IF_NOT_REF(pzv);				\
 		convert_to_explicit_type(pzv, str_type);	\
 	}
 
@@ -414,7 +414,6 @@ ZEND_API void ZEND_FASTCALL zend_locale_sprintf_double(zval *op ZEND_FILE_LINE_D
 
 #define convert_scalar_to_number_ex(pzv)							\
 	if (Z_TYPE_P(pzv)!=IS_LONG && Z_TYPE_P(pzv)!=IS_DOUBLE) {		\
-		SEPARATE_ZVAL_IF_NOT_REF(pzv);								\
 		convert_scalar_to_number(pzv);					\
 	}
 
@@ -848,6 +847,8 @@ static zend_always_inline int fast_is_identical_function(zval *op1, zval *op2)
 {
 	if (Z_TYPE_P(op1) != Z_TYPE_P(op2)) {
 		return 0;
+	} else if (Z_TYPE_P(op1) <= IS_TRUE) {
+		return 1;
 	}
 	return zend_is_identical(op1, op2);
 }
@@ -856,6 +857,8 @@ static zend_always_inline int fast_is_not_identical_function(zval *op1, zval *op
 {
 	if (Z_TYPE_P(op1) != Z_TYPE_P(op2)) {
 		return 1;
+	} else if (Z_TYPE_P(op1) <= IS_TRUE) {
+		return 0;
 	}
 	return !zend_is_identical(op1, op2);
 }
