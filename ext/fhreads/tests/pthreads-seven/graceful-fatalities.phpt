@@ -5,7 +5,8 @@ This test verifies that fatalities are graceful with regard to state
 --FILE--
 <?php
 
-require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
+if (!extension_loaded('pthreads'))
+    require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
 
 class TestThread extends Thread {
 	public function run(){

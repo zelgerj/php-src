@@ -5,7 +5,8 @@ This test verifies the functionality of selective inheritance
 --FILE--
 <?php
 
-require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
+if (!extension_loaded('pthreads'))
+    require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
 
 function TestFunction(){
 	return __FUNCTION__;

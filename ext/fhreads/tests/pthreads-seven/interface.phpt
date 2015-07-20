@@ -5,7 +5,8 @@ This test verifies that interfaces are handled properly by pthreads
 --FILE--
 <?php
 
-require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
+if (!extension_loaded('pthreads'))
+    require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
 
 interface INamedThread {
 	function setName($name);

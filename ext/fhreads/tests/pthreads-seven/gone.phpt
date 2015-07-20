@@ -2,10 +2,13 @@
 Test objects that have gone away
 --DESCRIPTION--
 This test verifies that objects that have gone away do not cause segfaults
+--SKIPIF--
+<?php extension_loaded('pthreads') or die('skip pthreads specific test'); ?>
 --FILE--
 <?php
 
-require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
+if (!extension_loaded('pthreads'))
+    require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
 
 class O extends Threaded { 
 	public function run() {

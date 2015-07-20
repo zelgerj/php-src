@@ -5,7 +5,8 @@ This test verifies Threaded objects can be created from Closures
 --FILE--
 <?php
 
-require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
+if (!extension_loaded('pthreads'))
+    require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
 
 $threaded = Thread::from(function(){
     $this->test = "hello";

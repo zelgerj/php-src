@@ -5076,10 +5076,14 @@ void zend_compile_class_decl(zend_ast *ast) /* {{{ */
 			import_name = zend_hash_find_ptr(FC(imports), lcname);
 		}
 
+		printf("zend_compile_class_decl: %s\n", lcname->val);
+
+		/*
 		if (import_name && !zend_string_equals_ci(lcname, import_name)) {
 			zend_error_noreturn(E_COMPILE_ERROR, "Cannot declare class %s "
 					"because the name is already in use", ZSTR_VAL(name));
 		}
+		*/
 
 		name = zend_new_interned_string(name);
 		lcname = zend_new_interned_string(lcname);

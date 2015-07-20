@@ -5,7 +5,8 @@ Test that resources and objects are not corrupted when written to thread storage
 --FILE--
 <?php
 
-require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
+if (!extension_loaded('pthreads'))
+    require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
 
 class Work extends Threaded {
 	public function run(){

@@ -640,6 +640,7 @@ zend_op_array *compile_filename(int type, zval *filename)
 		convert_to_string(&tmp);
 		filename = &tmp;
 	}
+
 	file_handle.filename = Z_STRVAL_P(filename);
 	file_handle.free_filename = 0;
 	file_handle.type = ZEND_HANDLE_FILENAME;

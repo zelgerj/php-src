@@ -5,7 +5,8 @@ This test will ensure that INI directives are inherited and or created upon init
 --FILE--
 <?php
 
-require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
+if (!extension_loaded('pthreads'))
+    require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
 
 ini_set("include_path", ":/var/lib/other");
 class Test extends Thread {

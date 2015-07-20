@@ -68,6 +68,8 @@ extern zend_module_entry fhreads_module_entry;
 #include <Zend/zend_vm.h>
 #include <TSRM/TSRM.h>
 
+#include "ext/standard/basic_functions.h"
+
 typedef struct _fhread_object {
 	pthread_t thread_id;
 	pthread_mutex_t syncMutex;
@@ -89,6 +91,14 @@ typedef struct _fhread_objects_store {
 	int free_list_head;
 	pthread_mutex_t mutex;
 } fhread_objects_store;
+
+#ifdef HAVE_SIGNAL_H
+#ifdef _WIN32
+#	define FHREAD_KILL_SIGNAL SIGBREAK
+#else
+#	define FHREAD_KILL_SIGNAL SIGUSR1
+#endif
+#endif
 
 /* {{{ TSRM manipulation */
 #define FHREADS_FETCH_ALL(ls, id, type) ((type) (*((void ***) ls))[TSRM_UNSHUFFLE_RSRC_ID(id)])

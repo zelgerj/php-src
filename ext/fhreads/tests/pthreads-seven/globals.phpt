@@ -5,7 +5,8 @@ Test functionality of globals inheritance
 --FILE--
 <?php
 
-require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
+if (!extension_loaded('pthreads'))
+    require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
 
 class Test extends Thread {
 	public function run(){
@@ -23,7 +24,7 @@ $object->three = "three";
 $array = array(1, 2, 3);
 
 $test = new Test();
-$test->start(PTHREADS_INHERIT_ALL | PTHREADS_ALLOW_GLOBALS);
+$test->start();
 $test->join();
 ?>
 --EXPECTF--

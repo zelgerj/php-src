@@ -213,6 +213,16 @@ abstract class Thread implements Runnable
     }
     
     /**
+     * Sends a kill signal to get killed
+     *
+     * @return boolean
+     */
+    public function kill()
+    {
+        return fhread_kill($this->fhreadHandle);
+    }
+    
+    /**
      * Returns wheater the thread is in waiting state or not
      * 
      * @return bool

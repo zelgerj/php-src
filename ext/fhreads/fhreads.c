@@ -139,6 +139,10 @@ void fhread_object_store_init()
 	fhread_objects.object_buckets = (fhread_object **) emalloc(fhread_objects.size * sizeof(fhread_object*));
 	// erase data
 	memset(&fhread_objects.object_buckets[0], 0, sizeof(fhread_object*));
+
+	zend_hash_init(&EG(regular_list), 1024, NULL, list_entry_destructor, 0);
+	zend_hash_init_ex(&EG(persistent_list), 1024, NULL, plist_entry_destructor, 1, 0);
+
 } /* }}} */
 
 /* {{{ Creates and returns new fhread object */
@@ -237,15 +241,30 @@ void fhread_init_compiler(fhread_object *fhread) /* {{{ */
 /* {{{ Initialises the executor in fhreads context */
 void fhread_init_executor(fhread_object *fhread) /* {{{ */
 {
+	BG(locale_string) = NULL;
+	BG(CurrentLStatFile) = NULL;
+	BG(CurrentStatFile) = NULL;
+
 	// link global stuff
-	CG(function_table) = FHREADS_CG(fhread->c_tsrm_ls, function_table);
-	EG(included_files) = FHREADS_EG(fhread->c_tsrm_ls, included_files);
+	//EG(included_files) = FHREADS_EG(fhread->c_tsrm_ls, included_files);
+	zend_hash_init(&EG(included_files), 8, NULL, NULL, 0);
+
+	EG(ini_directives) = FHREADS_EG(fhread->c_tsrm_ls, ini_directives);
 	EG(zend_constants) = FHREADS_EG(fhread->c_tsrm_ls, zend_constants);
+
+	CG(function_table) = FHREADS_CG(fhread->c_tsrm_ls, function_table);
 	EG(function_table) = FHREADS_CG(fhread->c_tsrm_ls, function_table);
+	// EG(function_table) = CG(function_table);
+
+	CG(class_table) = FHREADS_CG(fhread->c_tsrm_ls, class_table);
 	EG(class_table) = FHREADS_CG(fhread->c_tsrm_ls, class_table);
+	// EG(class_table) = CG(class_table);
+
 	EG(regular_list) = FHREADS_EG(fhread->c_tsrm_ls, regular_list);
 	EG(persistent_list) = FHREADS_EG(fhread->c_tsrm_ls, persistent_list);
+
 	EG(objects_store) = FHREADS_EG(fhread->c_tsrm_ls, objects_store);
+
 	EG(symbol_table) = FHREADS_EG(fhread->c_tsrm_ls, symbol_table);
 
 	zend_init_fpu();
@@ -267,7 +286,7 @@ void fhread_init_executor(fhread_object *fhread) /* {{{ */
 
 	zend_vm_stack_init();
 
-	zend_hash_init(&EG(symbol_table), 64, NULL, ZVAL_PTR_DTOR, 0);
+	//zend_hash_init(&EG(symbol_table), 64, NULL, ZVAL_PTR_DTOR, 0);
 	EG(valid_symbol_table) = 1;
 
 	EG(ticks_count) = 0;
@@ -311,10 +330,17 @@ void fhread_init(fhread_object* fhread)
 		tsrm_set_interpreter_context(TSRMLS_CACHE);
 		// link server context
 		SG(server_context) = FHREADS_SG(fhread->c_tsrm_ls, server_context);
+
+#ifdef ZTS
+		virtual_cwd_activate();
+#endif
+		gc_reset();
 		// init compiler
 		fhread_init_compiler(fhread);
 		// init executor
 		fhread_init_executor(fhread);
+		startup_scanner();
+
 		// set initialized flag to be true
 		fhread->is_initialized = 1;
 	}
@@ -334,15 +360,13 @@ void fhread_run(fhread_object* fhread)
 	pthread_cond_broadcast(&fhread->notify);
 
 	// call run method
-	// zend_call_method_with_0_params(&runnable, obj->ce, NULL, "run", &rv);
-
-	zend_function *fun;
+	zend_function *run;
 	zend_fcall_info fci = empty_fcall_info;
 	zend_fcall_info_cache fcc = empty_fcall_info_cache;
 	zend_string *method = zend_string_init(ZEND_STRL("run"), 0);
 
-	if ((fun = zend_hash_find_ptr(&Z_OBJCE(runnable)->function_table, method))) {
-		if (fun->type == ZEND_USER_FUNCTION) {
+	if ((run = zend_hash_find_ptr(&Z_OBJCE(runnable)->function_table, method))) {
+		if (run->type == ZEND_USER_FUNCTION) {
 			ZVAL_STR(&fci.function_name, method);
 			fci.size = sizeof(zend_fcall_info);
 			fci.retval = &rv;
@@ -352,7 +376,7 @@ void fhread_run(fhread_object* fhread)
 			fcc.object = Z_OBJ(runnable);
 			fcc.calling_scope = Z_OBJCE(runnable);
 			fcc.called_scope = Z_OBJCE(runnable);
-			fcc.function_handler = fun;
+			fcc.function_handler = run;
 
 			EG(scope) = Z_OBJCE(runnable);
 
@@ -364,9 +388,12 @@ void fhread_run(fhread_object* fhread)
 	zval_ptr_dtor(&rv);
 } /* }}} */
 
+
+
 /* {{{ The routine to call for pthread_create */
 void *fhread_routine (void* ptr)
 {
+
 	// run fhread
 	fhread_run(fhread_objects.object_buckets[*((uint32_t*)ptr)]);
 	// exit thread
@@ -593,6 +620,23 @@ PHP_FUNCTION(fhread_detach)
 	RETURN_LONG((long)status);
 }
 
+PHP_FUNCTION(fhread_kill)
+{
+	uint32_t fhread_handle;
+	fhread_object* fhread;
+	int status;
+
+	// parse thread id for thread to join to
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "l", &fhread_handle) == FAILURE) {
+		RETURN_NULL();
+	}
+
+	// get fhread object
+	fhread = fhread_objects.object_buckets[fhread_handle];
+
+	RETURN_BOOL(pthread_kill(fhread->thread_id, FHREAD_KILL_SIGNAL)==SUCCESS);
+}
+
 /* {{{ PHP_MINIT_FUNCTION */
 PHP_MINIT_FUNCTION(fhreads)
 {
@@ -659,6 +703,7 @@ const zend_function_entry fhreads_functions[] = {
 	PHP_FE(fhread_self, 					NULL)
 	PHP_FE(fhread_create, 					arginfo_fhread_create)
 	PHP_FE(fhread_join, 					NULL)
+	PHP_FE(fhread_kill,						NULL)
 	PHP_FE(fhread_detach, 					NULL)
 	PHP_FE(fhread_mutex_init, 				NULL)
 	PHP_FE(fhread_mutex_lock, 				NULL)
