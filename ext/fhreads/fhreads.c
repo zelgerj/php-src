@@ -241,6 +241,7 @@ void fhread_init_compiler(fhread_object *fhread) /* {{{ */
 /* {{{ Initialises the executor in fhreads context */
 void fhread_init_executor(fhread_object *fhread) /* {{{ */
 {
+
 	BG(locale_string) = NULL;
 	BG(CurrentLStatFile) = NULL;
 	BG(CurrentStatFile) = NULL;
@@ -260,8 +261,8 @@ void fhread_init_executor(fhread_object *fhread) /* {{{ */
 	EG(class_table) = FHREADS_CG(fhread->c_tsrm_ls, class_table);
 	// EG(class_table) = CG(class_table);
 
-	EG(regular_list) = FHREADS_EG(fhread->c_tsrm_ls, regular_list);
-	EG(persistent_list) = FHREADS_EG(fhread->c_tsrm_ls, persistent_list);
+	//EG(regular_list) = FHREADS_EG(fhread->c_tsrm_ls, regular_list);
+	//EG(persistent_list) = FHREADS_EG(fhread->c_tsrm_ls, persistent_list);
 
 	EG(objects_store) = FHREADS_EG(fhread->c_tsrm_ls, objects_store);
 
