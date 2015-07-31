@@ -10,7 +10,6 @@ if (!extension_loaded('pthreads'))
 
 define("INC", sprintf("%s/includeme.inc", dirname(__FILE__)));
 
-include(INC);
 class TestThread extends Thread {
 	public function run(){
 		require_once(INC);
@@ -21,6 +20,7 @@ class TestThread extends Thread {
 }
 $test = new TestThread();
 $test->start();
+$test->join();
 ?>
 --EXPECT--
 OK

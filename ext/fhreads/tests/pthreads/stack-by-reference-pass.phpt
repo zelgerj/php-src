@@ -1,5 +1,7 @@
 --TEST--
 Test stacking by reference ONLY (pass)
+--XFAIL--
+Worker class not implemented yet
 --DESCRIPTION--
 Stacking without a reference is not allowed, so the API should enforce the requirement
 --FILE--
