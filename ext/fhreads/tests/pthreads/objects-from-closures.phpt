@@ -1,5 +1,7 @@
 --TEST--
 Testing closure to object conversion
+--XFAIL--
+::from function not implemented yet
 --DESCRIPTION--
 This test verifies Threaded objects can be created from Closures
 --FILE--

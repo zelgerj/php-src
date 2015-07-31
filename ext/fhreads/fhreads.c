@@ -241,13 +241,12 @@ void fhread_init_compiler(fhread_object *fhread) /* {{{ */
 /* {{{ Initialises the executor in fhreads context */
 void fhread_init_executor(fhread_object *fhread) /* {{{ */
 {
-
 	BG(locale_string) = NULL;
 	BG(CurrentLStatFile) = NULL;
 	BG(CurrentStatFile) = NULL;
 
 	// link global stuff
-	//EG(included_files) = FHREADS_EG(fhread->c_tsrm_ls, included_files);
+	// EG(included_files) = FHREADS_EG(fhread->c_tsrm_ls, included_files);
 	zend_hash_init(&EG(included_files), 8, NULL, NULL, 0);
 
 	EG(ini_directives) = FHREADS_EG(fhread->c_tsrm_ls, ini_directives);
@@ -255,14 +254,14 @@ void fhread_init_executor(fhread_object *fhread) /* {{{ */
 
 	CG(function_table) = FHREADS_CG(fhread->c_tsrm_ls, function_table);
 	EG(function_table) = FHREADS_CG(fhread->c_tsrm_ls, function_table);
-	// EG(function_table) = CG(function_table);
 
 	CG(class_table) = FHREADS_CG(fhread->c_tsrm_ls, class_table);
 	EG(class_table) = FHREADS_CG(fhread->c_tsrm_ls, class_table);
-	// EG(class_table) = CG(class_table);
 
 	//EG(regular_list) = FHREADS_EG(fhread->c_tsrm_ls, regular_list);
 	//EG(persistent_list) = FHREADS_EG(fhread->c_tsrm_ls, persistent_list);
+
+
 
 	EG(objects_store) = FHREADS_EG(fhread->c_tsrm_ls, objects_store);
 
@@ -299,7 +298,6 @@ void fhread_init_executor(fhread_object *fhread) /* {{{ */
 	zend_stack_init(&EG(user_error_handlers_error_reporting), sizeof(int));
 	zend_stack_init(&EG(user_error_handlers), sizeof(zval));
 	zend_stack_init(&EG(user_exception_handlers), sizeof(zval));
-
 
 	EG(full_tables_cleanup) = 0;
 	#ifdef ZEND_WIN32
@@ -394,7 +392,6 @@ void fhread_run(fhread_object* fhread)
 /* {{{ The routine to call for pthread_create */
 void *fhread_routine (void* ptr)
 {
-
 	// run fhread
 	fhread_run(fhread_objects.object_buckets[*((uint32_t*)ptr)]);
 	// exit thread

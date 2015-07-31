@@ -176,14 +176,6 @@ class Threaded implements ArrayAccess, Countable
     //public function notify() {}
 
     /**
-     * Pops an item from the objects property table
-     *
-     * @link http://www.php.net/manual/en/threaded.pop.php
-     * @return mixed The last item from the objects properties table
-     */
-    //public function pop() {}
-
-    /**
      * The programmer should always implement the run method for objects that are intended for execution.
      *
      * @link http://www.php.net/manual/en/threaded.run.php
@@ -192,12 +184,37 @@ class Threaded implements ArrayAccess, Countable
     //public function run() {}
 
     /**
+     * Pops an item from the objects property table
+     *
+     * @link http://www.php.net/manual/en/threaded.pop.php
+     * @return mixed The last item from the objects properties table
+     */
+    public function pop()
+    {
+        $properties = get_object_vars($this);
+        end($properties);
+        $lastPropertyKey = key($properties);
+        // add possible ref before unset property from table
+        $returnProperty = $this[$lastPropertyKey];
+        unset($this[$lastPropertyKey]);
+        return $returnProperty;
+    }
+    
+    /**
      * Shifts an item from the objects properties table
      *
      * @link http://www.php.net/manual/en/threaded.shift.php
      * @return mixed The first item from the objects properties table
      */
-    //public function shift() {}
+    public function shift()
+    {
+        $firstPropertyKey = key(get_object_vars($this));
+        // add possible ref before unset property from table
+        $returnProperty = $this[$firstPropertyKey];
+        $this->offsetUnset($firstPropertyKey);
+        unset($this[$firstPropertyKey]);
+        return $returnProperty;
+    }
 
     /**
      * Executes the block while retaining the synchronization lock for the current context.
