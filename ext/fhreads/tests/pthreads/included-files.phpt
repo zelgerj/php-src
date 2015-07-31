@@ -5,7 +5,8 @@ This test verifies that require_once and include are working as expected
 --FILE--
 <?php
 
-require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
+if (!extension_loaded('pthreads'))
+    require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
 
 define("INC", sprintf("%s/includeme.inc", dirname(__FILE__)));
 

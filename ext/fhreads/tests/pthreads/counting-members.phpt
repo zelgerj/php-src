@@ -1,11 +1,12 @@
 --TEST--
 Testing member count
 --DESCRIPTION--
-This test verifies that getting member counts works without effort
+This test verifies that getting member counts works
 --FILE--
 <?php
 
-require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
+if (!extension_loaded('pthreads'))
+    require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
 
 class Test extends Threaded {
 	public function run() { 

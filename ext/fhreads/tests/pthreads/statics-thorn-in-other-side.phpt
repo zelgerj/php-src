@@ -3,7 +3,8 @@ Test statics aren't getting fucked with when starting new threads (many bugs)
 --FILE--
 <?php
 
-require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
+if (!extension_loaded('pthreads'))
+    require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
 
 class StaticClass{
     public static $list = array();

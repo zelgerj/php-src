@@ -5,7 +5,8 @@ This test verifies that null members do not crash php
 --FILE--
 <?php
 
-require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
+if (!extension_loaded('pthreads'))
+    require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
 
 class Test extends Threaded {
     public function run(){}

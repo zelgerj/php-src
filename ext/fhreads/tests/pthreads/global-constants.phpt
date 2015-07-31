@@ -5,7 +5,8 @@ This test verifies that global constants are inherited
 --FILE--
 <?php
 
-require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
+if (!extension_loaded('pthreads'))
+    require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
 
 define ("SCONST", "mystring");
 define ("LCONST", 10);

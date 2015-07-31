@@ -5,7 +5,8 @@ Class defaults should now initialize defaults properly
 --FILE--
 <?php
 
-require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
+if (!extension_loaded('pthreads'))
+    require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
 
 class Test extends Thread {
 
@@ -23,6 +24,7 @@ class Test extends Thread {
 $test =new Test();
 $test->string = strrev($test->string);
 $test->start();
+$test->join();
 ?>
 --EXPECTF--
 object(Test)#1 (%d) {
@@ -49,10 +51,10 @@ object(Test)#1 (%d) {
     int(1)
   }
   ["threadId":protected]=>
-  &int(%d)
+  %s(%d)
   ["fhreadHandle":protected]=>
-  &int(%d)
-  ["mutex":protected]=>
+  %s(%d)
+  ["globalMutex":protected]=>
   int(%d)
   ["stateMutex":protected]=>
   int(%d)

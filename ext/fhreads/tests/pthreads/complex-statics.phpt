@@ -5,7 +5,8 @@ This test verifies that complex static types are ignored when creating thread co
 --FILE--
 <?php
 
-require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
+if (!extension_loaded('pthreads'))
+    require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
 
 class sql {
 	public static $connection;

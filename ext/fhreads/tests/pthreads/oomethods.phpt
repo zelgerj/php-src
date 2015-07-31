@@ -5,7 +5,8 @@ User methods are now imported from your declared class into the thread
 --FILE--
 <?php
 
-require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
+if (!extension_loaded('pthreads'))
+    require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
 
 class ThreadTest extends Thread {
 	public function objectTest(){

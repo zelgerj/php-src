@@ -5,7 +5,8 @@ Static methods as declared in the users implementation of Thread should now be a
 --FILE--
 <?php
 
-require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
+if (!extension_loaded('pthreads'))
+    require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
 
 class ThreadTest extends Thread {
 	public static function staticTest(){

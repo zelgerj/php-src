@@ -5,7 +5,8 @@ This test will ensures mutex functionality
 --FILE--
 <?php
 
-require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
+if (!extension_loaded('pthreads'))
+    require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
 
 $mutex = Mutex::create();
 var_dump(Mutex::lock($mutex));

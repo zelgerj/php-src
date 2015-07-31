@@ -2,10 +2,13 @@
 Test objects that have gone away
 --DESCRIPTION--
 This test verifies that objects that have gone away do not cause segfaults
+--SKIPIF--
+<?php extension_loaded('pthreads') or die('skip pthreads specific test'); ?>
 --FILE--
 <?php
 
-require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
+if (!extension_loaded('pthreads'))
+    require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
 
 class O extends Threaded { 
 	public function run() {
@@ -30,9 +33,14 @@ $t->join();
 var_dump($t->o);
 ?>
 --EXPECTF--
-Fatal error: Uncaught exception 'RuntimeException' with message 'pthreads detected an attempt to connect to a O which has already been destroyed' in %s:%d
+Fatal error: Uncaught %s: pthreads detected an attempt to connect to a %s which has already been destroyed in %s:14
 Stack trace:
-#0 %s(%d): unknown()
+#0 [internal function]: T->run()
 #1 {main}
-  thrown in %s on line %d
+  thrown in %s on line 14
+
+Fatal error: Uncaught %s: pthreads detected an attempt to connect to a %s which has already been destroyed in %s:22
+Stack trace:
+#0 {main}
+  thrown in %s on line 22
 

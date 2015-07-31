@@ -5,7 +5,8 @@ This tests that merging ranges works as expected (long keys)
 --FILE--
 <?php
 
-require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
+if (!extension_loaded('pthreads'))
+    require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
 
 class Storage extends Threaded {
     public function run() {}

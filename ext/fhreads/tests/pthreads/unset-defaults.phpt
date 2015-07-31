@@ -5,7 +5,8 @@ This test verifies that unset members do not cause a problem in pthreads objects
 --FILE--
 <?php
 
-require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
+if (!extension_loaded('pthreads'))
+    require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
 
 class TestThread extends Thread {
 	public $default;

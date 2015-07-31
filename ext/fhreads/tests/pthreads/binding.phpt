@@ -4,8 +4,8 @@ Test pthreads connections
 This test verifies that variables are bound properly by pthreads
 --FILE--
 <?php
-
-require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
+if (!extension_loaded('pthreads'))
+    require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
 
 class ThreadTesting extends Thread {
 	public $other;

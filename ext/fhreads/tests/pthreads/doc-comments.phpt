@@ -5,7 +5,8 @@ Test that doc comments are copied, no leaking/errors
 --FILE--
 <?php
 
-require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
+if (!extension_loaded('pthreads'))
+    require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
 
 /**
 * Comment
@@ -38,6 +39,8 @@ class T extends Thread {
 $t = new T();
 $t->start();
 $t->join();
+
+echo "\r";
 
 $reflect = new ReflectionMethod("T", "run");
 var_dump($reflect);

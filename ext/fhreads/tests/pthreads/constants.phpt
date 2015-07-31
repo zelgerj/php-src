@@ -5,7 +5,8 @@ This test verifies that constant members in declarations made outside of threads
 --FILE--
 <?php
 
-require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
+if (!extension_loaded('pthreads'))
+    require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
 
 class TestThread extends Thread {
 	public function run() { printf("%s\n", DateTime::ISO8601 ); }

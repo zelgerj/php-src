@@ -5,7 +5,8 @@ This test verifies pool defaults
 --FILE--
 <?php
 
-require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
+if (!extension_loaded('pthreads'))
+    require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
 
 class Work extends Threaded {
 	public function run() {
@@ -16,6 +17,10 @@ class Work extends Threaded {
 $pool = new Pool(1);
 $pool->submit(new Work());
 $pool->shutdown();
+
+$pool->collect(function(Work $work) {
+	return true;
+});
 
 var_dump($pool);
 ?>
@@ -34,17 +39,12 @@ object(Pool)#%d (%d) {
   array(0) {
   }
   ["work":protected]=>
-  array(1) {
-    [0]=>
-    object(Work)#%d (%d) {
-      ["worker"]=>
-      object(Worker)#%d (%d) {
-      }
-    }
+  array(0) {
   }
   ["ctor":protected]=>
   NULL
   ["last":protected]=>
   int(1)
 }
+
 

@@ -3,7 +3,9 @@ Test isset and empty are compliant with standard objects (fix bug #347)
 --FILE--
 <?php
 
-require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
+if (!extension_loaded('pthreads'))
+    require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
+
 
 class standard {
     public $t_false = false;

@@ -5,7 +5,8 @@ This test verifies that members of an object type that have no other references 
 --FILE--
 <?php
 
-require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
+if (!extension_loaded('pthreads'))
+    require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
 
 class O extends Threaded {
 	public function run(){}
@@ -22,12 +23,10 @@ class T extends Thread {
 var_dump(new T());
 ?>
 --EXPECTF--
-object(T)#1 (1) {
-  ["t"]=>
-  NULL
+object(T)#1 (0) {
 }
 
-Fatal error: Uncaught exception 'RuntimeException' with message 'pthreads detected an attempt to connect to a O which has already been destroyed' in %s:%d
+Fatal error: Uncaught %s: pthreads detected an attempt to connect to a %s which has already been destroyed in %s:%d
 Stack trace:
 #0 %s(%d): var_dump(Object(T))
 #1 {main}

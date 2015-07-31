@@ -1,13 +1,14 @@
 --TEST--
-Test kill termination info
+Test kill
 --DESCRIPTION--
-This test verifies that ::kill sets state and error information
+This test verifies that ::kill sets state
 --FILE--
 <?php
 
-require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
+if (!extension_loaded('pthreads'))
+    require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
 
-class TestThread extends Thread
+class Test extends Thread
 {
     public $started = false;
 
@@ -22,11 +23,11 @@ class TestThread extends Thread
     }
 }
 
-$t = new TestThread();
+$t = new Test();
 $t->start();
 
 $t->synchronized(function($that) {
-    while (! $that->started)
+    if (!$that->started)
         $that->wait();
 }, $t);
 
@@ -34,18 +35,7 @@ $t->kill();
 $t->join();
 
 var_dump($t->isTerminated());
-var_dump($t->getTerminationInfo());
 ?>
---EXPECTF--
+--EXPECT--
 bool(true)
-array(4) {
-  ["scope"]=>
-  string(10) "TestThread"
-  ["function"]=>
-  string(3) "run"
-  ["file"]=>
-  string(%d) "%s"
-  ["line"]=>
-  int(%d)
-}
 

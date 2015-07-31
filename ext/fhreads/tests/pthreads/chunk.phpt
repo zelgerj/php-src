@@ -5,7 +5,8 @@ This test verifies functionality of ::chunk
 --FILE--
 <?php
 
-require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
+if (!extension_loaded('pthreads'))
+    require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
 
 class S extends Threaded {
     public function run(){}
@@ -18,25 +19,25 @@ var_dump($s->chunk(10));
 ?>
 --EXPECT--
 array(10) {
-  [0]=>
+  ["0"]=>
   bool(true)
-  [1]=>
+  ["1"]=>
   bool(true)
-  [2]=>
+  ["2"]=>
   bool(true)
-  [3]=>
+  ["3"]=>
   bool(true)
-  [4]=>
+  ["4"]=>
   bool(true)
-  [5]=>
+  ["5"]=>
   bool(true)
-  [6]=>
+  ["6"]=>
   bool(true)
-  [7]=>
+  ["7"]=>
   bool(true)
-  [8]=>
+  ["8"]=>
   bool(true)
-  [9]=>
+  ["9"]=>
   bool(true)
 }
 

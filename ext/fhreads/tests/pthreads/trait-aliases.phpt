@@ -7,7 +7,8 @@ Fix bug #274, trait aliases causing memory errors
 --FILE--
 <?php
 
-require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
+if (!extension_loaded('pthreads'))
+    require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
 
 trait testTrait {
     public function fromTrait ($foo) {

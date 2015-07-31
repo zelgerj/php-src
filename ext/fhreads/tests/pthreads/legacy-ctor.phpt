@@ -5,7 +5,8 @@ This test verifies that legacy ctors do not induce failure
 --FILE--
 <?php
 
-require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
+if (!extension_loaded('pthreads'))
+    require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
 
 class test2 {
         function test2() {
@@ -22,5 +23,6 @@ class test1 extends Thread {
 $t = new test1();
 $t->start();
 $t->join();
---EXPECT--
+--EXPECTF--
+Deprecated: Methods with the same name as their class will not be constructors in a future version of PHP; test2 has a deprecated constructor in %s on line 4
 ctor test2

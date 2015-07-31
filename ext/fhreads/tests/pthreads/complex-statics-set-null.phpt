@@ -1,9 +1,12 @@
 --TEST--
 Test NULLing ressources in arrays
+--SKIPIF--
+<?php extension_loaded('pthreads') or die('skip pthreads specific test'); ?>
 --FILE--
 <?php
 
-require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
+if (!extension_loaded('pthreads'))
+    require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
 
 class file {
 	public static $fps;
@@ -48,20 +51,20 @@ $thread->join();
 file::_get: something1
 array(1) {
   [%i]=>
-  resource(5) of type (stream)
+  resource(%d) of type (stream)
 }
 file::_get: something2
 array(1) {
   [%i]=>
-  resource(5) of type (stream)
+  resource(%d) of type (stream)
 }
 file::_get: something3
 array(1) {
   [%i]=>
-  resource(2) of type (stream)
+  resource(%d) of type (stream)
 }
 file::_get: something4
 array(1) {
   [%i]=>
-  resource(2) of type (stream)
+  resource(%d) of type (stream)
 }

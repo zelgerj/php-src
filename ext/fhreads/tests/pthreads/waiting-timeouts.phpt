@@ -5,8 +5,10 @@ This test verifies that reaching at timeout returns the correct value
 --FILE--
 <?php
 
-require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
-exit 0;
+if (!extension_loaded('pthreads'))
+    require dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bootstrap.inc';
+
+exit(0);
 
 class T extends Thread {
         public $data;
