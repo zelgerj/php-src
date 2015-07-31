@@ -496,6 +496,13 @@ PHP_FUNCTION(fhread_cond_wait)
 	}
 } /* }}} */
 
+/* {{{ proto fhread_objects_store_top()
+	Obtain current top value eg objects_store */
+PHP_FUNCTION(fhread_objects_store_top)
+{
+	ZVAL_LONG(return_value, fhreads_zend_objects_store_top);
+} /* }}} */
+
 /* {{{ proto fhread_object_get_handle(object obj)
 	Obtain the identifier of the given objects handle */
 PHP_FUNCTION(fhread_object_get_handle)
@@ -699,8 +706,10 @@ PHP_MINFO_FUNCTION(fhreads)
  *
  * Every user visible function must have an entry in fhreads_functions[]. */
 const zend_function_entry fhreads_functions[] = {
-	PHP_FE(fhread_tsrm_get_ls_cache,		NULL)
 	PHP_FE(fhread_object_get_handle, 		NULL)
+	PHP_FE(fhread_objects_store_top,		NULL)
+
+	PHP_FE(fhread_tsrm_get_ls_cache,		NULL)
 	PHP_FE(fhread_self, 					NULL)
 	PHP_FE(fhread_create, 					arginfo_fhread_create)
 	PHP_FE(fhread_join, 					NULL)
