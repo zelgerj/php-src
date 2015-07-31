@@ -23,8 +23,9 @@ class Test extends Threaded {
     }
 }
 $test = new Test();
-$test->one = 1;
-var_dump(isset($test->one));
+isset($test->one);
+$test->two = "two";
+var_dump(isset($test->two));
 unset($test->one);
 var_dump(isset($test->one));
 ?>
@@ -33,4 +34,6 @@ magic __isset
 bool(true)
 magic __unset
 magic __isset
+magic __isset
 bool(false)
+

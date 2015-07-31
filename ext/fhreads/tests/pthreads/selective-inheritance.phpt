@@ -1,5 +1,7 @@
 --TEST--
 Test selective inheritance
+--XFAIL--
+pthreads specific
 --DESCRIPTION--
 This test verifies the functionality of selective inheritance
 --FILE--

@@ -1,5 +1,7 @@
 --TEST--
 Test members (typeof object) with no other references
+--XFAIL--
+pthreads specific test
 --DESCRIPTION--
 This test verifies that members of an object type that have no other references in the engine can be set as members of threaded objects
 --FILE--

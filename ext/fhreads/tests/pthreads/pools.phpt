@@ -1,5 +1,7 @@
 --TEST--
 Test pooling
+--XFAIL--
+Pool class not implemented yet.
 --DESCRIPTION--
 This test verifies the functionality of selective inheritance
 --FILE--

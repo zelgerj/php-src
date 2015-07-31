@@ -25,6 +25,7 @@ class Test extends Threaded {
 
 $test = new Test();
 $test->one = "one";
+$a = $test->a;
 var_dump($test->one);
 
 ?>

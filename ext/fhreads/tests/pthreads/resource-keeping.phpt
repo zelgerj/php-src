@@ -1,5 +1,7 @@
 --TEST--
 Test sane handling of resources from foreign contexts
+--XFAIL--
+Worker class not implemented yet.
 --DESCRIPTION--
 Test that resources from other thread contexts can properly be accessed and are only destroyed by their owner
 --FILE--

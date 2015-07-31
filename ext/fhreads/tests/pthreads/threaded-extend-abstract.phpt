@@ -1,5 +1,7 @@
 --TEST--
 Test extending abstract
+--XFAIL--
+Threaded::extend function not implemented yet.
 --DESCRIPTION--
 This is regression test for #409
 --FILE--

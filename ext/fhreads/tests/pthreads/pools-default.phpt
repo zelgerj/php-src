@@ -1,5 +1,7 @@
 --TEST--
 Test pool defaults
+--XFAIL--
+Pool class not implemented yet.
 --DESCRIPTION--
 This test verifies pool defaults
 --FILE--

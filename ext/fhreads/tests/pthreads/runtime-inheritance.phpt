@@ -1,5 +1,7 @@
 --TEST--
 Test runtime extension
+--XFAIL--
+Threaded::extend function not implemented yet.
 --DESCRIPTION--
 This test verifies functionality of runtime extension
 --FILE--

@@ -30,6 +30,8 @@ class Test extends Thread {
 
 $test =new Test();
 $test->start();
+$test->join();
+
 ?>
 --EXPECT--
 Work Object

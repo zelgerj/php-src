@@ -18,7 +18,7 @@ class StaticClass{
 }
 
 class ThreadClass extends Thread{   
-
+    public function run() {}
 }
 
 new StaticClass;

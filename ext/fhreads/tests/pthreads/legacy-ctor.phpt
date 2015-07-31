@@ -24,5 +24,5 @@ $t = new test1();
 $t->start();
 $t->join();
 --EXPECTF--
-Deprecated: Methods with the same name as their class will not be constructors in a future version of PHP; test2 has a deprecated constructor in %s on line 4
+Deprecated: Methods with the same name as their class will not be constructors in a future version of PHP; test2 has a deprecated constructor in %s on line 8
 ctor test2
