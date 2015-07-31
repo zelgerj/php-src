@@ -1,7 +1,8 @@
 <?php
 
+// include classes
 if (!class_exists('\Thread')) {
-    require_once __DIR__ . "/../tests/bootstrap.inc";
+    require_once __DIR__ . "/../classes/Thread.php";
 }
 
 class ThreadWorker extends \Thread
@@ -55,12 +56,15 @@ class Server extends \Thread
             });
             
         }
+        
         for ($i = 0; $i < $this->workerCount; $i++) {
             $worker[$i]->start();
         }
+        
         for ($i = 0; $i < $this->workerCount; $i++) {
             $worker[$i]->join();
         }
+        
     }
 }
 

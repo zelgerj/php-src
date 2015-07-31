@@ -1,7 +1,8 @@
 <?php
 
+// include classes
 if (!class_exists('\Thread')) {
-    require_once __DIR__ . DIRECTORY_SEPARATOR . "Thread.php";
+    require_once __DIR__ . "/../classes/Thread.php";
 }
 
 /*

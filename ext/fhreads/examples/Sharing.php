@@ -1,8 +1,8 @@
 <?php
 
-// to be compatible with pthreads lib
+// include classes
 if (!class_exists('\Thread')) {
-    require_once __DIR__ . DIRECTORY_SEPARATOR . "Thread.php";
+    require_once __DIR__ . "/../classes/Thread.php";
 }
 
 // define counter thread class which counts the shared data objects counter property
