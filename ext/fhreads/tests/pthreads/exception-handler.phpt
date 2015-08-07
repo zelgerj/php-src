@@ -45,7 +45,7 @@ object(Exception)#2 (%d) {
   ["file":protected]=>
   string(%d) "%s"
   ["line":protected]=>
-  int(13)
+  int(17)
   ["trace":"Exception":private]=>
   array(2) {
     [0]=>
@@ -53,7 +53,7 @@ object(Exception)#2 (%d) {
       ["file"]=>
       string(%d) "%s"
       ["line"]=>
-      int(17)
+      int(21)
       ["function"]=>
       string(9) "traceable"
       ["class"]=>

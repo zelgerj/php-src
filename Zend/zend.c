@@ -1398,6 +1398,7 @@ ZEND_API int zend_execute_scripts(int type, zval *retval, int file_count, ...) /
 		if (op_array) {
 			zend_execute(op_array, retval);
 			zend_exception_restore();
+
 			if (EG(exception)) {
 				if (Z_TYPE(EG(user_exception_handler)) != IS_UNDEF) {
 					zval orig_user_exception_handler;

@@ -40,10 +40,18 @@ uint32_t fhreads_zend_objects_store_top;
 int fhreads_zend_objects_store_free_list_head;
 pthread_mutex_t fhreads_zend_objects_store_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+typedef void (*zend_throw_exception_hook_func)(zval * TSRMLS_DC);
+zend_throw_exception_hook_func zend_throw_exception_hook_orig = NULL;
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_fhread_create, 0, 0, 1)
 	ZEND_ARG_INFO(0, runnable)
 	ZEND_ARG_INFO(1, thread_id)
 	ZEND_ARG_INFO(1, fhread_handle)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_fhread_join, 0, 0, 1)
+	ZEND_ARG_INFO(0, fhread_handle)
+	ZEND_ARG_INFO(1, rv)
 ZEND_END_ARG_INFO()
 
 /* {{{ PHP_INI */
@@ -120,7 +128,7 @@ static void fhread_init_object_handlers()
 	memcpy(&fhreads_handlers, fhreads_zend_handlers, sizeof(zend_object_handlers));
 	// override object handlers
 	// fhreads_handlers.write_property = fhread_write_property;
-	// fhreads_handlers.get_gc = NULL;
+	fhreads_handlers.get_gc = NULL;
 	// fhreads_handlers.free_obj = fhreads_object_free_storage;
 } /* }}} */
 
@@ -142,7 +150,6 @@ void fhread_object_store_init()
 
 	zend_hash_init(&EG(regular_list), 1024, NULL, list_entry_destructor, 0);
 	zend_hash_init_ex(&EG(persistent_list), 1024, NULL, plist_entry_destructor, 1, 0);
-
 } /* }}} */
 
 /* {{{ Creates and returns new fhread object */
@@ -160,6 +167,7 @@ static void fhread_object_destroy(fhread_object* fhread)
 	pthread_cond_destroy(&fhread->notify);
 	// finally free object itself
 	efree(fhread);
+	// set pointer to null
 	fhread = NULL;
 } /* }}} */
 
@@ -211,6 +219,8 @@ static fhread_object* fhread_object_create()
 	TSRMLS_CACHE_UPDATE();
 	// prepare fhread
 	fhread_object* fhread = emalloc(sizeof(fhread_object));
+	// init return value
+	fhread->rv = SUCCESS;
 	// init is joined flag
 	fhread->is_joined = 0;
 	// init executor flag
@@ -229,6 +239,40 @@ static fhread_object* fhread_object_create()
 	pthread_mutex_init(&fhread->execMutex, NULL);
 	// return inited object
 	return fhread;
+} /* }}} */
+
+/* {{{ Used to register throw exception hook internal */
+void fhread_throw_exception_hook(zval *ex TSRMLS_DC) {
+	if (!ex)
+		return;
+
+	if (Z_TYPE(EG(user_exception_handler)) != IS_UNDEF) {
+		zend_fcall_info fci = empty_fcall_info;
+		zend_fcall_info_cache fcc = empty_fcall_info_cache;
+		zval retval;
+		zend_string *cname;
+
+		ZVAL_UNDEF(&retval);
+
+		if (zend_fcall_info_init(&EG(user_exception_handler), IS_CALLABLE_CHECK_SILENT, &fci, &fcc, &cname, NULL) == SUCCESS) {
+			fci.retval = &retval;
+
+			EG(exception) = NULL;
+			zend_fcall_info_argn(&fci, 1, ex);
+			zend_call_function(&fci, &fcc);
+			zend_fcall_info_args_clear(&fci, 1);
+		}
+
+		if (Z_TYPE(retval) != IS_UNDEF)
+			zval_dtor(&retval);
+
+		if (cname)
+			zend_string_release(cname);
+	}
+
+	if (zend_throw_exception_hook_orig) {
+		zend_throw_exception_hook_orig(ex);
+	}
 } /* }}} */
 
 /* {{{ Initialises the compile in fhreads context */
@@ -261,18 +305,15 @@ void fhread_init_executor(fhread_object *fhread) /* {{{ */
 	//EG(regular_list) = FHREADS_EG(fhread->c_tsrm_ls, regular_list);
 	//EG(persistent_list) = FHREADS_EG(fhread->c_tsrm_ls, persistent_list);
 
-
-
 	EG(objects_store) = FHREADS_EG(fhread->c_tsrm_ls, objects_store);
-
 	EG(symbol_table) = FHREADS_EG(fhread->c_tsrm_ls, symbol_table);
+
+	EG(user_exception_handler) = FHREADS_EG(fhread->c_tsrm_ls, user_exception_handler);
 
 	zend_init_fpu();
 
 	ZVAL_NULL(&EG(uninitialized_zval));
-
 	ZVAL_NULL(&EG(error_zval));
-
 	// destroys stack frame, therefore makes core dumps worthless
 #if 0&&ZEND_DEBUG
 	original_sigsegv_handler = signal(SIGSEGV, zend_handle_sigsegv);
@@ -298,6 +339,8 @@ void fhread_init_executor(fhread_object *fhread) /* {{{ */
 	zend_stack_init(&EG(user_error_handlers_error_reporting), sizeof(int));
 	zend_stack_init(&EG(user_error_handlers), sizeof(zval));
 	zend_stack_init(&EG(user_exception_handlers), sizeof(zval));
+
+
 
 	EG(full_tables_cleanup) = 0;
 	#ifdef ZEND_WIN32
@@ -330,6 +373,11 @@ void fhread_init(fhread_object* fhread)
 		// link server context
 		SG(server_context) = FHREADS_SG(fhread->c_tsrm_ls, server_context);
 
+		// init vars
+		PG(expose_php) = 0;
+		PG(auto_globals_jit) = 0;
+		SG(sapi_started) = 0;
+
 #ifdef ZTS
 		virtual_cwd_activate();
 #endif
@@ -338,7 +386,11 @@ void fhread_init(fhread_object* fhread)
 		fhread_init_compiler(fhread);
 		// init executor
 		fhread_init_executor(fhread);
+		// startup scanner
 		startup_scanner();
+
+		// activate output
+		php_output_activate();
 
 		// set initialized flag to be true
 		fhread->is_initialized = 1;
@@ -346,7 +398,7 @@ void fhread_init(fhread_object* fhread)
 } /* }}} */
 
 /* {{{ Run the runnable zval in given fhread context */
-void fhread_run(fhread_object* fhread)
+void *fhread_run(fhread_object* fhread)
 {
 	zval runnable, rv;
 	zend_object* obj;
@@ -355,8 +407,6 @@ void fhread_run(fhread_object* fhread)
 	// get runnable from object
 	obj = EG(objects_store).object_buckets[fhread->runnable_handle];
 	ZVAL_OBJ(&runnable, obj);
-	// send signal for creator logic to go ahead
-	pthread_cond_broadcast(&fhread->notify);
 
 	// call run method
 	zend_function *run;
@@ -366,25 +416,39 @@ void fhread_run(fhread_object* fhread)
 
 	if ((run = zend_hash_find_ptr(&Z_OBJCE(runnable)->function_table, method))) {
 		if (run->type == ZEND_USER_FUNCTION) {
-			ZVAL_STR(&fci.function_name, method);
-			fci.size = sizeof(zend_fcall_info);
-			fci.retval = &rv;
-			fci.object = Z_OBJ(runnable);
-			fci.no_separation = 1;
-			fcc.initialized = 1;
-			fcc.object = Z_OBJ(runnable);
-			fcc.calling_scope = Z_OBJCE(runnable);
-			fcc.called_scope = Z_OBJCE(runnable);
-			fcc.function_handler = run;
+			zend_try {
+				ZVAL_STR(&fci.function_name, method);
+				fci.size = sizeof(zend_fcall_info);
+				fci.retval = &rv;
+				fci.object = Z_OBJ(runnable);
+				fci.no_separation = 1;
+				fcc.initialized = 1;
+				fcc.object = Z_OBJ(runnable);
+				fcc.calling_scope = Z_OBJCE(runnable);
+				fcc.called_scope = Z_OBJCE(runnable);
+				fcc.function_handler = run;
+				EG(scope) = Z_OBJCE(runnable);
 
-			EG(scope) = Z_OBJCE(runnable);
+				// send signal for creator logic to go ahead
+				pthread_cond_broadcast(&fhread->notify);
 
-			zend_call_function(&fci, &fcc);
+				// call run function
+				zend_call_function(&fci, &fcc);
+
+				// destroy function return value
+				zval_ptr_dtor(&rv);
+
+				// set return value to success
+				fhread->rv = SUCCESS;
+
+			} zend_catch {
+				// set return value to be failure
+				fhread->rv = FAILURE;
+			} zend_end_try();
 		}
 	}
 
-	// destroy return value
-	zval_ptr_dtor(&rv);
+	return &fhread->rv;
 } /* }}} */
 
 
@@ -392,10 +456,9 @@ void fhread_run(fhread_object* fhread)
 /* {{{ The routine to call for pthread_create */
 void *fhread_routine (void* ptr)
 {
-	// run fhread
-	fhread_run(fhread_objects.object_buckets[*((uint32_t*)ptr)]);
-	// exit thread
-	pthread_exit(NULL);
+	// run & exit fhread
+	pthread_exit(fhread_run(fhread_objects.object_buckets[*((uint32_t*)ptr)]));
+
 #ifdef _WIN32
 	return NULL; /* silence MSVC compiler */
 #endif
@@ -576,10 +639,12 @@ PHP_FUNCTION(fhread_join)
 {
 	uint32_t fhread_handle;
 	fhread_object* fhread;
+	zval *rv;
+	int *prv;
 	int status;
 
 	// parse thread id for thread to join to
-	if (zend_parse_parameters(ZEND_NUM_ARGS(), "l", &fhread_handle) == FAILURE) {
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "l|z/", &fhread_handle, &rv) == FAILURE) {
 		RETURN_NULL();
 	}
 
@@ -589,8 +654,10 @@ PHP_FUNCTION(fhread_join)
 	// join thread if not done yet
 	if (fhread->is_joined == 0) {
 		fhread->is_joined = 1;
-		status = pthread_join(fhread->thread_id, NULL);
+		status = pthread_join(fhread->thread_id, (void**)&prv);
 	}
+
+	ZVAL_LONG(rv, *prv);
 
 	// return status
 	RETURN_LONG((long)status);
@@ -654,6 +721,10 @@ PHP_MINIT_FUNCTION(fhreads)
 	// init fhread object handlers
 	fhread_init_object_handlers();
 
+	// register throw exception hook and backup orig
+	zend_throw_exception_hook_orig = zend_throw_exception_hook;
+	zend_throw_exception_hook = fhread_throw_exception_hook;
+
 	return SUCCESS;
 } /* }}} */
 
@@ -662,6 +733,9 @@ PHP_MSHUTDOWN_FUNCTION(fhreads)
 {
 	// destroy fhreads object store
 	fhread_object_store_destroy();
+
+	// restore orig throw exception hook
+	zend_throw_exception_hook = zend_throw_exception_hook_orig;
 
 	UNREGISTER_INI_ENTRIES();
 
@@ -709,7 +783,7 @@ const zend_function_entry fhreads_functions[] = {
 	PHP_FE(fhread_tsrm_get_ls_cache,		NULL)
 	PHP_FE(fhread_self, 					NULL)
 	PHP_FE(fhread_create, 					arginfo_fhread_create)
-	PHP_FE(fhread_join, 					NULL)
+	PHP_FE(fhread_join, 					arginfo_fhread_join)
 	PHP_FE(fhread_kill,						NULL)
 	PHP_FE(fhread_detach, 					NULL)
 	PHP_FE(fhread_mutex_init, 				NULL)

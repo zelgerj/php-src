@@ -156,7 +156,6 @@ abstract class Thread implements Runnable
      */
     public function hasState($state)
     {
-        $hasState = false;
         fhread_mutex_lock($this->stateMutex);
         $hasState = ($this->state === $state);
         fhread_mutex_unlock($this->stateMutex);
@@ -179,8 +178,13 @@ abstract class Thread implements Runnable
             throw new \Exception('Thread has not been started yet!');
         }
 
-        if (fhread_join($this->fhreadHandle) === 0) {
-            $this->setState(self::STATE_JOINED);
+        if (fhread_join($this->fhreadHandle, $rv) === 0) {
+            // check if error occured in run method
+            if ($rv != 0) {
+                $this->setState(self::STATE_ERROR);
+            } else {
+                $this->setState(self::STATE_JOINED);
+            }
             return true;
         }
         
@@ -230,6 +234,16 @@ abstract class Thread implements Runnable
     public function isWaiting()
     {
         return $this->hasState(self::STATE_WAITING);
+    }
+    
+    /**
+     * Returns wheater the thread was left in state error or not
+     *
+     * @return bool
+     */
+    public function isTerminated()
+    {
+        return $this->hasState(self::STATE_ERROR);
     }
     
     /**

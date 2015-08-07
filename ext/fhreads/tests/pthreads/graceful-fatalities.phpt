@@ -14,15 +14,16 @@ class TestThread extends Thread {
 		echo @MY::$FATAL;
 	}
 }
+
 $test = new TestThread();
 $test->start();
 $test->join();
 var_dump($test->isTerminated());
 ?>
 --EXPECTF--
-Fatal error: Uncaught Error: Class 'MY' not found in %s:5
+Fatal error: Uncaught Error: Class 'MY' not found in %s:9
 Stack trace:
 #0 [internal function]: TestThread->run()
 #1 {main}
-  thrown in %s on line 5
+  thrown in %s on line 9
 bool(true)
