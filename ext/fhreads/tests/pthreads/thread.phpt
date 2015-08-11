@@ -2,6 +2,8 @@
 Test basic threading
 --DESCRIPTION--
 This test will create and join a simple thread
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

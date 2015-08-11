@@ -4,6 +4,8 @@ Test trait aliases
 <?php if(PHP_VERSION_ID < 50400) die("skip do not run for <5.4"); ?>
 --DESCRIPTION--
 Fix bug #274, trait aliases causing memory errors
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

@@ -4,6 +4,8 @@ Test stacking by reference ONLY (pass)
 Worker class not implemented yet
 --DESCRIPTION--
 Stacking without a reference is not allowed, so the API should enforce the requirement
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

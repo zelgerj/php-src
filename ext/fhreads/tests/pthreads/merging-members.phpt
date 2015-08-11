@@ -2,6 +2,8 @@
 Testing merging members
 --DESCRIPTION--
 This tests that merging members works as expected
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

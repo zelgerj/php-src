@@ -2,6 +2,8 @@
 Test magic __get and __set
 --DESCRIPTION--
 This test verifies that __set and __get work as expected
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

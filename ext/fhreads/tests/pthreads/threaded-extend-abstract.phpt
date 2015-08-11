@@ -4,6 +4,8 @@ Test extending abstract
 Threaded::extend function not implemented yet.
 --DESCRIPTION--
 This is regression test for #409
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

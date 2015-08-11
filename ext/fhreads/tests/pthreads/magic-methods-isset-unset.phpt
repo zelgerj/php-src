@@ -2,6 +2,8 @@
 Test magic __isset and __unset
 --DESCRIPTION--
 This test verifies that __isset and __unset work as expected
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

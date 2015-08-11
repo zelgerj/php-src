@@ -2,6 +2,8 @@
 Test mutex operations
 --DESCRIPTION--
 This test will ensures mutex functionality
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

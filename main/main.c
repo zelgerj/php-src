@@ -1007,6 +1007,7 @@ static void php_error_cb(int type, const char *error_filename, const uint error_
 
 	/* according to error handling mode, suppress error, throw exception or show it */
 	if (EG(error_handling) != EH_NORMAL) {
+
 		switch (type) {
 			case E_ERROR:
 			case E_CORE_ERROR:

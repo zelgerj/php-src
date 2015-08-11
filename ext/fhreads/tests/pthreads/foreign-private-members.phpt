@@ -2,6 +2,8 @@
 Testing foreign private member access, magic methods bug #32
 --DESCRIPTION--
 Test that the fix for bug #32 is a success
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

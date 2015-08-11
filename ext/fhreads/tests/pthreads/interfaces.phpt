@@ -2,6 +2,8 @@
 Testing interfaces inheritance (#124)
 --DESCRIPTION--
 Test if interfaces are stored in thread
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

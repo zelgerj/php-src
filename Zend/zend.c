@@ -560,6 +560,7 @@ static void executor_globals_dtor(zend_executor_globals *executor_globals) /* {{
 	if (&executor_globals->persistent_list != global_persistent_list) {
 		zend_destroy_rsrc_list(&executor_globals->persistent_list);
 	}
+
 	if (executor_globals->zend_constants != GLOBAL_CONSTANTS_TABLE) {
 		zend_hash_destroy(executor_globals->zend_constants);
 		free(executor_globals->zend_constants);

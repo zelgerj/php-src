@@ -2,6 +2,8 @@
 Test static:: regression
 --DESCRIPTION--
 Bug #210 shows static:: requires different logic to self::
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

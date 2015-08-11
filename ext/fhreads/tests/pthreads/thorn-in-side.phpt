@@ -2,6 +2,8 @@
 Testing thorn in my side hasn't returned
 --DESCRIPTION--
 This test verifies my nemisis has not returned (bug #48)
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

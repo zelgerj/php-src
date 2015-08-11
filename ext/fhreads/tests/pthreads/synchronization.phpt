@@ -2,6 +2,8 @@
 Test synchronized blocks
 --DESCRIPTION--
 This test verifies that syncronization is working
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

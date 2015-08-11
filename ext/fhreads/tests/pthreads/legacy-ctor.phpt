@@ -2,6 +2,8 @@
 Test legacy constructor (issue #336)
 --DESCRIPTION--
 This test verifies that legacy ctors do not induce failure
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

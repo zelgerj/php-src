@@ -1,5 +1,7 @@
 --TEST--
 Testing closure members
+--ENV--
+USE_ZEND_ALLOC=0
 --DESCRIPTION--
 This test verifies that closures can be set as members and called from anywhere
 --FILE--
@@ -31,7 +33,6 @@ class T extends Thread {
         $this->synchronized(function($thread){
             $thread->set = true;
             $thread->test->some = function() {
-                echo PHP_EOL;
                 echo "Hello World" . PHP_EOL;
             };
             $thread->notify();

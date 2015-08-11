@@ -2,6 +2,8 @@
 Test complex statics bug #32
 --DESCRIPTION--
 This test verifies that complex static types are ignored when creating thread contexts, leading to predictable stable behaviour
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

@@ -4,6 +4,8 @@ Test sane handling of resources from foreign contexts
 Worker class not implemented yet.
 --DESCRIPTION--
 Test that resources from other thread contexts can properly be accessed and are only destroyed by their owner
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

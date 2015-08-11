@@ -2,6 +2,8 @@
 Test waiting timeouts
 --DESCRIPTION--
 This test verifies that reaching at timeout returns the correct value
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

@@ -2,6 +2,8 @@
 Test INI inheritance (bug 20)
 --DESCRIPTION--
 This test will ensure that INI directives are inherited and or created upon initialization of new threads
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

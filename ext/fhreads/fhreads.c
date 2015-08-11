@@ -95,8 +95,19 @@ ZEND_API void fhreads_zend_objects_store_add_to_free_list(uint32_t handle) /* {{
 /* }}} */
 
 /* {{{ Prepares zend objects store for threaded environment */
-static void fhread_prepare_zend_objects_store()
+static void fhread_prepare_executor_globals()
 {
+	ZEND_TSRMLS_CACHE_UPDATE();
+
+	/* prepare constants */
+	// save old global consts table
+	HashTable *global_constants = EG(zend_constants);
+	// reinit constants
+	zend_startup_constants();
+	// copy constants from global constants
+	zend_copy_constants(EG(zend_constants), global_constants);
+
+	/* prepare zend objects_store */
 	// recalc object store size that reallocation does not get trigged
 	uint32_t new_objects_store_size = EG(objects_store).size * 1024 * 8;
 	// reallocate objects store at beginning
@@ -109,7 +120,7 @@ static void fhread_prepare_zend_objects_store()
 	fhreads_zend_objects_store_top = EG(objects_store).top;
 	fhreads_zend_objects_store_free_list_head = EG(objects_store).free_list_head;
 
-	// synchronize objects store
+	// synchronize objects store by providing thread-safe objects_store management functions
 	zend_objects_store_get_handle_ex = fhreads_zend_objects_store_get_handle;
 	zend_objects_store_add_to_free_list_ex = fhreads_zend_objects_store_add_to_free_list;
 } /* }}} */
@@ -273,6 +284,7 @@ void fhread_throw_exception_hook(zval *ex TSRMLS_DC) {
 	if (zend_throw_exception_hook_orig) {
 		zend_throw_exception_hook_orig(ex);
 	}
+
 } /* }}} */
 
 /* {{{ Initialises the compile in fhreads context */
@@ -294,6 +306,7 @@ void fhread_init_executor(fhread_object *fhread) /* {{{ */
 	zend_hash_init(&EG(included_files), 8, NULL, NULL, 0);
 
 	EG(ini_directives) = FHREADS_EG(fhread->c_tsrm_ls, ini_directives);
+
 	EG(zend_constants) = FHREADS_EG(fhread->c_tsrm_ls, zend_constants);
 
 	CG(function_table) = FHREADS_CG(fhread->c_tsrm_ls, function_table);
@@ -306,9 +319,17 @@ void fhread_init_executor(fhread_object *fhread) /* {{{ */
 	//EG(persistent_list) = FHREADS_EG(fhread->c_tsrm_ls, persistent_list);
 
 	EG(objects_store) = FHREADS_EG(fhread->c_tsrm_ls, objects_store);
+
 	EG(symbol_table) = FHREADS_EG(fhread->c_tsrm_ls, symbol_table);
+	//zend_hash_init(&EG(symbol_table), 64, NULL, ZVAL_PTR_DTOR, 0);
 
 	EG(user_exception_handler) = FHREADS_EG(fhread->c_tsrm_ls, user_exception_handler);
+	EG(user_error_handler) = FHREADS_EG(fhread->c_tsrm_ls, user_error_handler);
+
+	EG(in_autoload) = FHREADS_EG(fhread->c_tsrm_ls, in_autoload);;
+	EG(autoload_func) = FHREADS_EG(fhread->c_tsrm_ls, autoload_func);
+
+	EG(error_handling) = FHREADS_EG(fhread->c_tsrm_ls, error_handling);
 
 	zend_init_fpu();
 
@@ -321,13 +342,9 @@ void fhread_init_executor(fhread_object *fhread) /* {{{ */
 	EG(symtable_cache_ptr) = EG(symtable_cache) - 1;
 	EG(symtable_cache_limit) = EG(symtable_cache) + SYMTABLE_CACHE_SIZE - 1;
 	EG(no_extensions) = 0;
-	EG(in_autoload) = NULL;
-	EG(autoload_func) = NULL;
-	EG(error_handling) = EH_NORMAL;
 
 	zend_vm_stack_init();
 
-	//zend_hash_init(&EG(symbol_table), 64, NULL, ZVAL_PTR_DTOR, 0);
 	EG(valid_symbol_table) = 1;
 
 	EG(ticks_count) = 0;
@@ -339,8 +356,6 @@ void fhread_init_executor(fhread_object *fhread) /* {{{ */
 	zend_stack_init(&EG(user_error_handlers_error_reporting), sizeof(int));
 	zend_stack_init(&EG(user_error_handlers), sizeof(zval));
 	zend_stack_init(&EG(user_exception_handlers), sizeof(zval));
-
-
 
 	EG(full_tables_cleanup) = 0;
 	#ifdef ZEND_WIN32
@@ -386,12 +401,12 @@ void fhread_init(fhread_object* fhread)
 		fhread_init_compiler(fhread);
 		// init executor
 		fhread_init_executor(fhread);
+
 		// startup scanner
 		startup_scanner();
 
 		// activate output
 		php_output_activate();
-
 		// set initialized flag to be true
 		fhread->is_initialized = 1;
 	}
@@ -444,6 +459,7 @@ void *fhread_run(fhread_object* fhread)
 			} zend_catch {
 				// set return value to be failure
 				fhread->rv = FAILURE;
+
 			} zend_end_try();
 		}
 	}
@@ -737,6 +753,11 @@ PHP_MSHUTDOWN_FUNCTION(fhreads)
 	// restore orig throw exception hook
 	zend_throw_exception_hook = zend_throw_exception_hook_orig;
 
+	// restore ini directives
+	if (zend_copy_ini_directives() == SUCCESS) {
+		zend_ini_refresh_caches(ZEND_INI_STAGE_STARTUP);
+	}
+
 	UNREGISTER_INI_ENTRIES();
 
 	return SUCCESS;
@@ -750,7 +771,7 @@ PHP_RINIT_FUNCTION(fhreads)
 	fhread_object_store_init();
 
 	// prepare zend executor globals objects store
-	fhread_prepare_zend_objects_store();
+	fhread_prepare_executor_globals();
 
 	return SUCCESS;
 } /* }}} */

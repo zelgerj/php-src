@@ -2,6 +2,8 @@
 Testing member count
 --DESCRIPTION--
 This test verifies that getting member counts works
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

@@ -1,5 +1,7 @@
 --TEST--
 Test isset and empty are compliant with standard objects (fix bug #347)
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

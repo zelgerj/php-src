@@ -2,6 +2,8 @@
 Testing extended object functionality, magic methods bug #34
 --DESCRIPTION--
 Test that the fix for bug #34 is a success
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

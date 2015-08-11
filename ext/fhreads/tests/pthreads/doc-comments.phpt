@@ -2,6 +2,8 @@
 Test doc comments are copied properly
 --DESCRIPTION--
 Test that doc comments are copied, no leaking/errors
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

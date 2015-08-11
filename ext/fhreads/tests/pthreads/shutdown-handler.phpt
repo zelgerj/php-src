@@ -2,6 +2,8 @@
 Test shutdown handlers #204
 --DESCRIPTION--
 Shutdown handlers that were closures were causing segfaults
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

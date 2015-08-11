@@ -2,6 +2,8 @@
 Test class defaults
 --DESCRIPTION--
 Class defaults should now initialize defaults properly
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

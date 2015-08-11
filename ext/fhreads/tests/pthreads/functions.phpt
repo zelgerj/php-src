@@ -2,6 +2,8 @@
 Test function table inheritance
 --DESCRIPTION--
 This test verifies that the function table is inherited by pthreads correctly
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

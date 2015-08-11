@@ -2,6 +2,8 @@
 Testing sane handling of resources and objects bug #39
 --DESCRIPTION--
 Test that resources and objects are not corrupted when written to thread storage
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

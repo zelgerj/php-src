@@ -4,6 +4,8 @@ Test selective inheritance
 pthreads specific
 --DESCRIPTION--
 This test verifies the functionality of selective inheritance
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

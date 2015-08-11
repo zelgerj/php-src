@@ -2,6 +2,8 @@
 Test access to user defined methods in the object context
 --DESCRIPTION--
 User methods are now imported from your declared class into the thread
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

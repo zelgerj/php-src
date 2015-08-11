@@ -2,6 +2,8 @@
 Testing normalizing members
 --DESCRIPTION--
 This tests that normalizing members works without effort
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

@@ -1,9 +1,9 @@
 --TEST--
 Test stateful fatalities
---XFAIL--
-graceful run method calling not yet implemented
 --DESCRIPTION--
 This test verifies that state includes fatalities
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

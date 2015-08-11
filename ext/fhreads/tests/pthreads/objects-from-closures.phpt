@@ -4,6 +4,8 @@ Testing closure to object conversion
 ::from function not implemented yet
 --DESCRIPTION--
 This test verifies Threaded objects can be created from Closures
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

@@ -2,6 +2,8 @@
 Test conditions
 --DESCRIPTION--
 This test verifies conditions are working
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

@@ -2,6 +2,8 @@
 Test interface functionality
 --DESCRIPTION--
 This test verifies that interfaces are handled properly by pthreads
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

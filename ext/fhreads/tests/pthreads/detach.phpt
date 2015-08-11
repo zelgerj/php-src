@@ -2,6 +2,8 @@
 Test detach is successful
 --DESCRIPTION--
 This test will detach a thread and check the return value
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

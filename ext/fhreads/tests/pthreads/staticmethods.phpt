@@ -2,6 +2,8 @@
 Test access to static methods from within user threads
 --DESCRIPTION--
 Static methods as declared in the users implementation of Thread should now be available for calling in the thread scope
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

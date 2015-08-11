@@ -2,6 +2,8 @@
 Testing merging members (long keys)
 --DESCRIPTION--
 This tests that merging ranges works as expected (long keys)
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

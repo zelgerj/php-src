@@ -2,6 +2,8 @@
 Test pthreads connections
 --DESCRIPTION--
 This test verifies that variables are bound properly by pthreads
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 if (!extension_loaded('pthreads'))

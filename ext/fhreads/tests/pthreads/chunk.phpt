@@ -2,6 +2,8 @@
 Check chunking
 --DESCRIPTION--
 This test verifies functionality of ::chunk
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

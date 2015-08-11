@@ -1,5 +1,7 @@
 --TEST--
 Test statics aren't getting fucked with when starting new threads (many bugs)
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

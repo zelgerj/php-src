@@ -2,6 +2,8 @@
 Null member crash
 --DESCRIPTION--
 This test verifies that null members do not crash php
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

@@ -2,6 +2,8 @@
 Testing isset unset
 --DESCRIPTION--
 This tests that isset and unset are working properly
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

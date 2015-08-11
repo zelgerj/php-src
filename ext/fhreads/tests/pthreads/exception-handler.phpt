@@ -2,6 +2,8 @@
 Test function table inheritance
 --DESCRIPTION--
 This test verifies that user exception handler is invoked by pthreads if set
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

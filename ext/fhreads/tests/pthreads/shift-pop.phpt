@@ -2,6 +2,8 @@
 Test shift and pop
 --DESCRIPTION--
 This test verifies that shift and pop functionality are working
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

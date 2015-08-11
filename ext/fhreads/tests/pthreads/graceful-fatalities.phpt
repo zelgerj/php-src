@@ -2,6 +2,8 @@
 Test graceful fatalities
 --DESCRIPTION--
 This test verifies that fatalities are graceful with regard to state
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

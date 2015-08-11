@@ -2,6 +2,8 @@
 Test include/require functions as expected
 --DESCRIPTION--
 This test verifies that require_once and include are working as expected
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

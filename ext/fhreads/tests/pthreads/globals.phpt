@@ -2,6 +2,8 @@
 Test global inheritance
 --DESCRIPTION--
 Test functionality of globals inheritance
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

@@ -2,6 +2,8 @@
 Test reading object properties without debug info
 --DESCRIPTION--
 This test verifies that reading properties from the object without var_dump/print_r will work
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

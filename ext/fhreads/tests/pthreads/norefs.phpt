@@ -4,6 +4,8 @@ Test members (typeof object) with no other references
 pthreads specific test
 --DESCRIPTION--
 This test verifies that members of an object type that have no other references in the engine can be set as members of threaded objects
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

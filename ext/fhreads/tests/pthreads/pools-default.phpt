@@ -4,6 +4,8 @@ Test pool defaults
 Pool class not implemented yet.
 --DESCRIPTION--
 This test verifies pool defaults
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

@@ -2,6 +2,8 @@
 Test wait/notify
 --DESCRIPTION--
 This test will verify wait/notify functionality
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

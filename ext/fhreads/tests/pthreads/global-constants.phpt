@@ -2,6 +2,8 @@
 Test global constants
 --DESCRIPTION--
 This test verifies that global constants are inherited
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 

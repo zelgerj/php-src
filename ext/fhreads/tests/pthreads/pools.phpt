@@ -4,6 +4,8 @@ Test pooling
 Pool class not implemented yet.
 --DESCRIPTION--
 This test verifies the functionality of selective inheritance
+--ENV--
+USE_ZEND_ALLOC=0
 --FILE--
 <?php
 
