@@ -301,6 +301,8 @@ void fhread_init_executor(fhread_object *fhread) /* {{{ */
 	BG(CurrentLStatFile) = NULL;
 	BG(CurrentStatFile) = NULL;
 
+	BG(user_shutdown_function_names) = NULL;
+
 	// link global stuff
 	// EG(included_files) = FHREADS_EG(fhread->c_tsrm_ls, included_files);
 	zend_hash_init(&EG(included_files), 8, NULL, NULL, 0);
@@ -467,11 +469,21 @@ void *fhread_run(fhread_object* fhread)
 	return &fhread->rv;
 } /* }}} */
 
-
+#ifdef FHREAD_KILL_SIGNAL
+static inline void fhreads_kill_handler(int signo) /* {{{ */
+{
+	zend_bailout();
+} /* }}} */
+#endif
 
 /* {{{ The routine to call for pthread_create */
 void *fhread_routine (void* ptr)
 {
+
+#ifdef FHREAD_KILL_SIGNAL
+	// register kill signal handler
+	signal(FHREAD_KILL_SIGNAL, fhreads_kill_handler);
+#endif
 	// run & exit fhread
 	pthread_exit(fhread_run(fhread_objects.object_buckets[*((uint32_t*)ptr)]));
 
@@ -719,10 +731,12 @@ PHP_FUNCTION(fhread_kill)
 		RETURN_NULL();
 	}
 
-	// get fhread object
-	fhread = fhread_objects.object_buckets[fhread_handle];
+	{
+		// get fhread object
+		fhread = fhread_objects.object_buckets[fhread_handle];
 
-	RETURN_BOOL(pthread_kill(fhread->thread_id, FHREAD_KILL_SIGNAL)==SUCCESS);
+		RETURN_BOOL(pthread_kill(fhread->thread_id, FHREAD_KILL_SIGNAL)==SUCCESS);
+	}
 }
 
 /* {{{ PHP_MINIT_FUNCTION */

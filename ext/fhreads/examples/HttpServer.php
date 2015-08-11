@@ -31,9 +31,10 @@ class ThreadWorker extends \Thread
 
 class Server extends \Thread
 {
-    public function __construct($workerCount)
+    public function __construct($workerCount, $onRequest)
     {
         $this->workerCount = $workerCount;
+        $this->onRequest = $onRequest;
     }
     
     public function run()
@@ -41,20 +42,8 @@ class Server extends \Thread
         $server = stream_socket_server('tcp://0.0.0.0:9001', $errno, $errstr, STREAM_SERVER_BIND|STREAM_SERVER_LISTEN);
         
         for ($i = 0; $i < $this->workerCount; $i++) {
-            $worker[$i] = new ThreadWorker($server);
-            
-            $worker[$i]->onRequest(function($client) {
-                fread($client, 2048);
-                $outputBuffer = fopen('php://temp', 'w+');
-                
-                fwrite($outputBuffer,  "200 OK HTTP/1.1\r\nConnection: close\r\n\r\n");
-                rewind($outputBuffer);
-                stream_copy_to_stream($outputBuffer, $client);
-                
-                fclose($outputBuffer);
-                fclose($client);
-            });
-            
+            $worker[$i] = new ThreadWorker($server);            
+            $worker[$i]->onRequest($this->onRequest);
         }
         
         for ($i = 0; $i < $this->workerCount; $i++) {
@@ -67,7 +56,17 @@ class Server extends \Thread
         
     }
 }
-
-$server = new Server(8);
+ 
+$server = new Server(8, function($client) {
+    fread($client, 2048);
+    $outputBuffer = fopen('php://temp', 'w+');
+    
+    fwrite($outputBuffer,  "200 OK HTTP/1.1\r\nConnection: close\r\n\r\n");
+    rewind($outputBuffer);
+    stream_copy_to_stream($outputBuffer, $client);
+    
+    fclose($outputBuffer);
+    fclose($client);
+});
 $server->start();
 $server->join();

@@ -1,5 +1,7 @@
 --TEST--
 Test shutdown handlers #204
+--XFAIL--
+Shutdown handler feature not implemented yet.
 --DESCRIPTION--
 Shutdown handlers that were closures were causing segfaults
 --ENV--

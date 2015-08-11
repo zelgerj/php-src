@@ -1,5 +1,7 @@
 --TEST--
 Test kill
+--XFAIL--
+kill feature not implemented yet.
 --DESCRIPTION--
 This test verifies that ::kill sets state
 --FILE--

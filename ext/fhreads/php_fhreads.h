@@ -24,7 +24,7 @@
 extern zend_module_entry fhreads_module_entry;
 #define phpext_fhreads_ptr &fhreads_module_entry
 
-#define PHP_FHREADS_VERSION "0.1.2"
+#define PHP_FHREADS_VERSION "1.0.0"
 
 #ifdef PHP_WIN32
 #	define PHP_FHREADS_API __declspec(dllexport)
@@ -35,6 +35,7 @@ extern zend_module_entry fhreads_module_entry;
 #endif
 
 #include <stdio.h>
+
 #ifndef _WIN32
 #include <pthread.h>
 #include <sys/time.h>

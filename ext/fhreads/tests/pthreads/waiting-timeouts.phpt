@@ -1,5 +1,7 @@
 --TEST--
 Test waiting timeouts
+--XFAIL--
+wait timeouts feature not implemented yet.
 --DESCRIPTION--
 This test verifies that reaching at timeout returns the correct value
 --ENV--
