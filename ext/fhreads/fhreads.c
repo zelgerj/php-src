@@ -125,11 +125,6 @@ static void fhread_prepare_executor_globals()
 	zend_objects_store_add_to_free_list_ex = fhreads_zend_objects_store_add_to_free_list;
 } /* }}} */
 
-static void fhreads_object_free_storage(zend_object *object) /* {{{ */
-{
-	//zend_object_std_dtor(&object->std);
-} /* }}} */
-
 /* {{{ Initialises the fhread object handlers */
 static void fhread_init_object_handlers()
 {
@@ -140,7 +135,6 @@ static void fhread_init_object_handlers()
 	// override object handlers
 	// fhreads_handlers.write_property = fhread_write_property;
 	fhreads_handlers.get_gc = NULL;
-	// fhreads_handlers.free_obj = fhreads_object_free_storage;
 } /* }}} */
 
 /* {{{ Initialises the fhread object store */
@@ -158,14 +152,16 @@ void fhread_object_store_init()
 	fhread_objects.object_buckets = (fhread_object **) emalloc(fhread_objects.size * sizeof(fhread_object*));
 	// erase data
 	memset(&fhread_objects.object_buckets[0], 0, sizeof(fhread_object*));
-
-	zend_hash_init(&EG(regular_list), 1024, NULL, list_entry_destructor, 0);
-	zend_hash_init_ex(&EG(persistent_list), 1024, NULL, plist_entry_destructor, 1, 0);
 } /* }}} */
 
 /* {{{ Creates and returns new fhread object */
 static void fhread_object_destroy(fhread_object* fhread)
 {
+	// if runnable still exists destroy it
+	if (fhread->runnable) {
+		zval_ptr_dtor(fhread->runnable);
+	}
+
 	// join thread if not done yet
 	if (fhread->is_joined == 0) {
 		fhread->is_joined = 1;
@@ -293,19 +289,6 @@ void fhread_init_compiler(fhread_object *fhread) /* {{{ */
 	// call original compiler
 	init_compiler();
 } /* }}} */
-
-void user_shutdown_function_dtor(zval *zv) /* {{{ */
-{
-	int i;
-	php_shutdown_function_entry *shutdown_function_entry = Z_PTR_P(zv);
-
-	for (i = 0; i < shutdown_function_entry->arg_count; i++) {
-		zval_ptr_dtor(&shutdown_function_entry->arguments[i]);
-	}
-	efree(shutdown_function_entry->arguments);
-	efree(shutdown_function_entry);
-}
-/* }}} */
 
 /* {{{ Initialises the executor in fhreads context */
 void fhread_init_executor(fhread_object *fhread) /* {{{ */
