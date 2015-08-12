@@ -294,13 +294,25 @@ void fhread_init_compiler(fhread_object *fhread) /* {{{ */
 	init_compiler();
 } /* }}} */
 
+void user_shutdown_function_dtor(zval *zv) /* {{{ */
+{
+	int i;
+	php_shutdown_function_entry *shutdown_function_entry = Z_PTR_P(zv);
+
+	for (i = 0; i < shutdown_function_entry->arg_count; i++) {
+		zval_ptr_dtor(&shutdown_function_entry->arguments[i]);
+	}
+	efree(shutdown_function_entry->arguments);
+	efree(shutdown_function_entry);
+}
+/* }}} */
+
 /* {{{ Initialises the executor in fhreads context */
 void fhread_init_executor(fhread_object *fhread) /* {{{ */
 {
 	BG(locale_string) = NULL;
 	BG(CurrentLStatFile) = NULL;
 	BG(CurrentStatFile) = NULL;
-
 	BG(user_shutdown_function_names) = NULL;
 
 	// link global stuff
@@ -454,6 +466,9 @@ void *fhread_run(fhread_object* fhread)
 
 				// destroy function return value
 				zval_ptr_dtor(&rv);
+
+				// call shutdown function to be compatible to pthreads api
+				php_call_shutdown_functions();
 
 				// set return value to success
 				fhread->rv = SUCCESS;

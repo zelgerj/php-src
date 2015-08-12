@@ -1,7 +1,7 @@
 --TEST--
 Test NULLing ressources in arrays
---SKIPIF--
-<?php extension_loaded('pthreads') or die('skip pthreads specific test'); ?>
+--XFAIL--
+pthreads specific test
 --ENV--
 USE_ZEND_ALLOC=0
 --FILE--

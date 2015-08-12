@@ -4,8 +4,8 @@ Test objects that have gone away
 This test verifies that objects that have gone away do not cause segfaults
 --ENV--
 USE_ZEND_ALLOC=0
---SKIPIF--
-<?php extension_loaded('pthreads') or die('skip pthreads specific test'); ?>
+--XFAIL--
+pthreads specific test
 --FILE--
 <?php
 
