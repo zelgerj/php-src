@@ -504,7 +504,6 @@ PHP_FUNCTION(fhread_mutex_destroy)
 /* {{{ proto fhread_mutex_init() */
 PHP_FUNCTION(fhread_mutex_init)
 {
-	return;
 	pthread_mutex_t *mutex;
 	if ((mutex=(pthread_mutex_t*) calloc(1, sizeof(pthread_mutex_t)))!=NULL) {
 		pthread_mutex_init(mutex, NULL);
