@@ -23,15 +23,15 @@ class TestThread extends \Thread
         $r = array();
         $i = 0;
         while($i < $this->iMax) {
-            $r[$i] = fopen('php://temp', 'w+');
-            usleep(rand(5000,10000));
+            $r[$i] = fopen('php://memory', 'w+b');
+            usleep(rand(1000,5000));
             $i++;
         }
         $this->r = $r;
         $i = 0;
         while($i < $this->iMax) {
             fclose($r[$i]);
-            usleep(rand(5000,10000));
+            usleep(rand(1000,5000));
             $i++;
         }
     }
@@ -42,7 +42,7 @@ class TestThread extends \Thread
 }
 
 $file = new \stdClass();
-$file->handle = fopen('php://temp', 'w+');
+$file->handle = fopen('php://memory', 'w+b');
 fwrite($file->handle, 'This is a test');
 
 $threads = [];
@@ -61,7 +61,6 @@ for ($i = 0; $i < $iMax; $i++) {
     $sumRCount += sizeof($threads[$i]->r);
 }
 
-echo "\r";
 var_dump(($iMax * $iMax) === $sumRCount);
 
 ?>

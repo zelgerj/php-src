@@ -294,8 +294,8 @@ void fhread_init_executor(fhread_object *fhread) /* {{{ */
 	BG(user_shutdown_function_names) = NULL;
 
 	// link global stuff
-	// EG(included_files) = FHREADS_EG(fhread->c_tsrm_ls, included_files);
-	zend_hash_init(&EG(included_files), 8, NULL, NULL, 0);
+	EG(included_files) = FHREADS_EG(fhread->c_tsrm_ls, included_files);
+	// zend_hash_init(&EG(included_files), 8, NULL, NULL, 0);
 
 	EG(ini_directives) = FHREADS_EG(fhread->c_tsrm_ls, ini_directives);
 
@@ -317,11 +317,10 @@ void fhread_init_executor(fhread_object *fhread) /* {{{ */
 
 	EG(user_exception_handler) = FHREADS_EG(fhread->c_tsrm_ls, user_exception_handler);
 	EG(user_error_handler) = FHREADS_EG(fhread->c_tsrm_ls, user_error_handler);
+	EG(error_handling) = FHREADS_EG(fhread->c_tsrm_ls, error_handling);
 
 	EG(in_autoload) = FHREADS_EG(fhread->c_tsrm_ls, in_autoload);;
 	EG(autoload_func) = FHREADS_EG(fhread->c_tsrm_ls, autoload_func);
-
-	EG(error_handling) = FHREADS_EG(fhread->c_tsrm_ls, error_handling);
 
 	zend_init_fpu();
 
